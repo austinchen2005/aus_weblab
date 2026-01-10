@@ -43,6 +43,61 @@ router.post("/initsocket", (req, res) => {
 // | write your API methods below!|
 // |------------------------------|
 
+// Get user stats (wins and losses)
+router.get("/stats", auth.ensureLoggedIn, (req, res) => {
+  res.send({
+    wins: req.user.wins || 0,
+    losses: req.user.losses || 0,
+  });
+});
+
+// Update user stats
+router.post("/stats", auth.ensureLoggedIn, async (req, res) => {
+  try {
+    const { wins, losses } = req.body;
+    const user = await User.findById(req.user._id);
+    
+    if (wins !== undefined) {
+      user.wins = wins;
+    }
+    if (losses !== undefined) {
+      user.losses = losses;
+    }
+    
+    await user.save();
+    res.send({ wins: user.wins, losses: user.losses });
+  } catch (err) {
+    console.log(`Failed to update stats: ${err}`);
+    res.status(500).send({ err });
+  }
+});
+
+// Increment wins
+router.post("/increment-wins", auth.ensureLoggedIn, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.wins = (user.wins || 0) + 1;
+    await user.save();
+    res.send({ wins: user.wins, losses: user.losses || 0 });
+  } catch (err) {
+    console.log(`Failed to increment wins: ${err}`);
+    res.status(500).send({ err });
+  }
+});
+
+// Increment losses
+router.post("/increment-losses", auth.ensureLoggedIn, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.losses = (user.losses || 0) + 1;
+    await user.save();
+    res.send({ wins: user.wins || 0, losses: user.losses });
+  } catch (err) {
+    console.log(`Failed to increment losses: ${err}`);
+    res.status(500).send({ err });
+  }
+});
+
 // anything else falls to this "not found" case
 router.all("*", (req, res) => {
   console.log(`API route not found: ${req.method} ${req.url}`);

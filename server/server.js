@@ -38,7 +38,7 @@ const socketManager = require("./server-socket");
 // TODO change connection URL after setting up your team database
 const mongoConnectionURL = process.env.MONGO_SRV;
 // TODO change database name to the name you chose
-const databaseName = "FILL_ME_IN";
+const databaseName = "aus_weblab";
 
 // mongoose 7 warning
 mongoose.set("strictQuery", false);
@@ -57,6 +57,18 @@ mongoose
 const app = express();
 app.use(validator.checkRoutes);
 
+// CORS middleware - allow requests from Vite dev server
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // allow us to process POST requests
 app.use(express.json());
 
@@ -67,6 +79,12 @@ app.use(
     secret: "session-secret",
     resave: false,
     saveUninitialized: false,
+    cookie: {
+      secure: false, // Set to true if using HTTPS
+      httpOnly: true,
+      sameSite: 'lax', // Allow cookies to be sent from different origins
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   })
 );
 

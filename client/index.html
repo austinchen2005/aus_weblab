@@ -5,10 +5,96 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="shortcut icon" href="favicon.png" type="image/x-icon" />
     <link rel="icon" href="favicon.png" type="image/x-icon" />
-    <title>CHANGE ME!</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <title>My Website</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/index.jsx"></script>
+    <!-- Login Page -->
+    <div id="login-page" style="display: none;">
+      <div class="login-container">
+        <h1>Welcome</h1>
+        <p>Please sign in to continue</p>
+        <div id="g_id_onload"
+             data-client_id="1001640154904-l5u78j6sq3jp3mgohhf6uaa9qolk3rgu.apps.googleusercontent.com"
+             data-callback="handleLogin"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="sign_in_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
+      </div>
+    </div>
+
+    <!-- App Content -->
+    <div id="app-content" style="display: none;">
+      <nav>
+        <ul>
+          <li><button onclick="showPage('home')" id="nav-home" class="active">Home</button></li>
+          <li><button onclick="showPage('play')" id="nav-play">Play</button></li>
+          <li><button onclick="showPage('leaderboard')" id="nav-leaderboard">Leaderboard</button></li>
+          <li><button onclick="showPage('settings')" id="nav-settings">Settings</button></li>
+          <!-- <li><button onclick="handleLogout()" id="nav-logout">Logout</button></li> -->
+        </ul>
+      </nav>
+
+      <div id="page-home" class="page active">
+      <h1>Home</h1>
+      <div class="stats-display">
+        <div class="stat-item">
+          <span class="stat-label">Wins:</span>
+          <span id="wins-display-home" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Losses:</span>
+          <span id="losses-display-home" class="stat-value">0</span>
+        </div>
+      </div>
+      </div>
+
+      <div id="page-play" class="page">
+      <h1>Play</h1>
+      <div class="stats-display">
+        <div class="stat-item">
+          <span class="stat-label">Wins:</span>
+          <span id="wins-display-play" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Losses:</span>
+          <span id="losses-display-play" class="stat-value">0</span>
+        </div>
+      </div>
+      <button id="start-game-btn" class="start-btn">Start game</button>
+      <div id="game-result" class="game-result"></div>
+      <div class="cards-container">
+        <div class="cards-section">
+          <h2>Player Cards</h2>
+          <div id="player-cards" class="cards-display"></div>
+        </div>
+        <div class="cards-section">
+          <h2>Dealer Cards</h2>
+          <div id="dealer-cards" class="cards-display"></div>
+        </div>
+      </div>
+      </div>
+
+      <div id="page-leaderboard" class="page">
+        <h1>Leaderboard</h1>
+      </div>
+
+      <div id="page-settings" class="page">
+        <h1>Settings!</h1>
+      </div>
+    </div>
+
+    <script type="module" src="/api-helper.js"></script>
+    <script type="module" src="/auth.js"></script>
+    <script type="module" src="/script.js"></script>
+    <script type="module" src="/game.js"></script>
   </body>
 </html>

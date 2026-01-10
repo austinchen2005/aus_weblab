@@ -1,0 +1,231 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: #f5f5f5;
+}
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.login-container h1 {
+  color: #2c3e50;
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.login-container p {
+  color: #7f8c8d;
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+}
+
+nav {
+  background-color: #2c3e50;
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+nav ul {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+nav button {
+  background-color: transparent;
+  border: none;
+  color: #ecf0f1;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+nav button:hover {
+  background-color: #34495e;
+}
+
+nav button.active {
+  background-color: #3498db;
+  color: white;
+}
+
+.page {
+  display: none;
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.page.active {
+  display: block;
+}
+
+.page h1 {
+  color: #2c3e50;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.stats-display {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #ecf0f1;
+  border-radius: 8px;
+}
+
+.stat-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.stat-label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.stat-value {
+  font-weight: bold;
+  color: #3498db;
+  font-size: 1.2rem;
+}
+
+.start-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 1rem 0;
+  transition: background-color 0.3s ease;
+}
+
+.start-btn:hover {
+  background-color: #2980b9;
+}
+
+.game-result {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 8px;
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-result.win {
+  background-color: #d4edda;
+  color: #155724;
+  border: 2px solid #c3e6cb;
+}
+
+.game-result.lose {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 2px solid #f5c6cb;
+}
+
+.game-result.tie {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 2px solid #ffeaa7;
+}
+
+.cards-container {
+  margin-top: 2rem;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-around;
+}
+
+.cards-section {
+  flex: 1;
+  min-width: 300px;
+}
+
+.cards-section h2 {
+  color: #2c3e50;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.cards-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 200px;
+}
+
+.no-cards {
+  color: #95a5a6;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+.card {
+  width: 150px;
+  height: 210px;
+  background-color: white;
+  border: 2px solid #2c3e50;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.card-rank {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.card-rank.red {
+  color: #e74c3c;
+}
+
+.card-suit {
+  font-size: 3rem;
+  color: #2c3e50;
+}
+
+.card-suit.red {
+  color: #e74c3c;
+}

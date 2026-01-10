@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      '^/api/': {
         target: "http://localhost:3000",
         changeOrigin: true,
       },
@@ -20,7 +20,9 @@ export default defineConfig({
         target: 'http://localhost:3000',
         ws: true,
         changeOrigin: true,
-    },
+      },
     }
-  }
+  },
+  // Serve index.html for all routes (SPA fallback)
+  appType: 'spa',
 });
