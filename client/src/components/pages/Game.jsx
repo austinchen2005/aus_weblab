@@ -87,6 +87,36 @@ const Game = () => {
       // console.log('Could not play sound:', err);
     }
   };
+
+  // Play win sound
+  const playWinSound = () => {
+    try {
+      const audio = new Audio('/win-sound.wav');
+      audio.volume = 0.7;
+      audio.play().catch(err => {
+        // Silently handle errors (browser autoplay policies, etc.)
+        // console.log('Could not play win sound:', err);
+      });
+    } catch (err) {
+      // Silently handle errors
+      // console.log('Could not play win sound:', err);
+    }
+  };
+
+  // Play lose sound
+  const playLoseSound = () => {
+    try {
+      const audio = new Audio('/lose-sound.mp3');
+      audio.volume = 0.7;
+      audio.play().catch(err => {
+        // Silently handle errors (browser autoplay policies, etc.)
+        // console.log('Could not play lose sound:', err);
+      });
+    } catch (err) {
+      // Silently handle errors
+      // console.log('Could not play lose sound:', err);
+    }
+  };
   
   // Refs to track current state in async callbacks
   const deckRef = useRef([]);
@@ -273,7 +303,7 @@ const Game = () => {
     }
   };
 
-  // Evaluate high card from any number of cards (1-4 cards)
+  // Evaluate hand from any number of cards (1-4 cards) - detects pairs, three of a kind, etc.
   const evaluateHighCard = (cards) => {
     if (cards.length === 0) return null;
     
@@ -289,17 +319,55 @@ const Game = () => {
       return value;
     });
     
-    const highCard = Math.max(...cardValues);
+    // Count occurrences of each value
+    const counts = {};
+    for (const value of cardValues) {
+      counts[value] = (counts[value] || 0) + 1;
+    }
     
     // Convert value to rank name
-    let rankName;
-    if (highCard === 14) rankName = 'Ace';
-    else if (highCard === 13) rankName = 'King';
-    else if (highCard === 12) rankName = 'Queen';
-    else if (highCard === 11) rankName = 'Jack';
-    else rankName = highCard.toString();
+    const valueToRankName = (value) => {
+      if (value === 14) return 'Ace';
+      if (value === 13) return 'King';
+      if (value === 12) return 'Queen';
+      if (value === 11) return 'Jack';
+      return value.toString();
+    };
     
-    return { value: 1, name: `High card, ${rankName}`, rank: highCard };
+    // Check for three of a kind
+    for (const [value, count] of Object.entries(counts)) {
+      if (count === 3) {
+        const val = parseInt(value, 10);
+        return { value: 4, name: `Three of a Kind, ${valueToRankName(val)}`, rank: val };
+      }
+    }
+    
+    // Check for pair
+    for (const [value, count] of Object.entries(counts)) {
+      if (count === 2) {
+        const val = parseInt(value, 10);
+        return { value: 2, name: `Pair of ${valueToRankName(val)}`, rank: val };
+      }
+    }
+    
+    // Check for two pair (if 4 cards)
+    if (cards.length === 4) {
+      const pairs = [];
+      for (const [value, count] of Object.entries(counts)) {
+        if (count === 2) {
+          pairs.push(parseInt(value, 10));
+        }
+      }
+      if (pairs.length === 2) {
+        const highPair = Math.max(...pairs);
+        const lowPair = Math.min(...pairs);
+        return { value: 3, name: `Two Pair, ${valueToRankName(highPair)} and ${valueToRankName(lowPair)}`, rank: highPair };
+      }
+    }
+    
+    // High card
+    const highCard = Math.max(...cardValues);
+    return { value: 1, name: `High card, ${valueToRankName(highCard)}`, rank: highCard };
   };
 
   // Find the best possible hand from any number of cards
@@ -752,13 +820,22 @@ const Game = () => {
   };
 
   // Update column and row selection states based on selected cards
-  const updateColumnRowStates = (selectedCardsSet) => {
+  // Optionally accepts grayedOutCardsSet to use updated state (for when called during card dealing)
+  const updateColumnRowStates = (selectedCardsSet, grayedOutCardsSet = null) => {
+    // Use provided grayed-out set or fall back to current state
+    const currentGrayedOut = grayedOutCardsSet || grayedOutCards;
+    
+    // Helper function to check if a card is in board
+    const isCardInBoardCheck = (rank, suit) => {
+      return currentGrayedOut.has(`${rank}-${suit}`);
+    };
+    
     // Update column states
     setSelectedColumns(prevCols => {
       const newColSet = new Set(prevCols);
       ranks.forEach(rank => {
         // Get all selectable (non-board) cards in this column
-        const selectableCards = suitsDisplay.filter(s => !isCardInBoard(rank, s));
+        const selectableCards = suitsDisplay.filter(s => !isCardInBoardCheck(rank, s));
         
         // If all cards in column are on board, don't mark column as selected
         if (selectableCards.length === 0) {
@@ -784,7 +861,7 @@ const Game = () => {
       const newRowSet = new Set(prevRows);
       suitsDisplay.forEach(suit => {
         // Get all selectable (non-board) cards in this row
-        const selectableCards = ranks.filter(r => !isCardInBoard(r, suit));
+        const selectableCards = ranks.filter(r => !isCardInBoardCheck(r, suit));
         
         // If all cards in row are on board, don't mark row as selected
         if (selectableCards.length === 0) {
@@ -1060,6 +1137,7 @@ const Game = () => {
         setIsDealing(false);
         setNewlyDealtCards(new Set()); // Clear highlights
         setGameResult("You lose!");
+        playLoseSound();
         setLosses(prevLosses => {
           const newLosses = prevLosses + 1;
           localStorage.setItem('gameLosses', newLosses.toString());
@@ -1112,7 +1190,8 @@ const Game = () => {
             // Update ref immediately
             selectedCardsRef.current = newSet;
             // Update column and row selection states after removing card
-            updateColumnRowStates(newSet);
+            // Pass the new grayed-out cards set so it uses the updated state
+            updateColumnRowStates(newSet, grayedState.newGrayedCards);
           }
           return newSet;
         });
@@ -1191,6 +1270,7 @@ const Game = () => {
         setIsDealing(false);
         setNewlyDealtCards(new Set()); // Clear highlights
         setGameResult("You lose!");
+        playLoseSound();
         setLosses(prevLosses => {
           const newLosses = prevLosses + 1;
           localStorage.setItem('gameLosses', newLosses.toString());
@@ -1243,7 +1323,8 @@ const Game = () => {
             // Update ref immediately
             selectedCardsRef.current = newSet;
             // Update column and row selection states after removing card
-            updateColumnRowStates(newSet);
+            // Pass the new grayed-out cards set so it uses the updated state
+            updateColumnRowStates(newSet, grayedState.newGrayedCards);
           }
           return newSet;
         });
@@ -1409,7 +1490,8 @@ const Game = () => {
             // Update ref immediately
             selectedCardsRef.current = newSet;
             // Update column and row selection states after removing card
-            updateColumnRowStates(newSet);
+            // Pass the new grayed-out cards set so it uses the updated state
+            updateColumnRowStates(newSet, grayedState.newGrayedCards);
           }
           return newSet;
         });
@@ -1461,6 +1543,7 @@ const Game = () => {
       
       if (comparison > 0) {
         setGameResult("You win!");
+        playWinSound();
         setWins(prevWins => {
           const newWins = prevWins + 1;
           localStorage.setItem('gameWins', newWins.toString());
@@ -1468,6 +1551,7 @@ const Game = () => {
         });
       } else if (comparison < 0) {
         setGameResult("You lose!");
+        playLoseSound();
         setLosses(prevLosses => {
           const newLosses = prevLosses + 1;
           localStorage.setItem('gameLosses', newLosses.toString());
@@ -1476,6 +1560,7 @@ const Game = () => {
       } else {
         // Ties are losses
         setGameResult("You lose! Ties are losses.");
+        playLoseSound();
         setLosses(prevLosses => {
           const newLosses = prevLosses + 1;
           localStorage.setItem('gameLosses', newLosses.toString());
@@ -1512,7 +1597,7 @@ const Game = () => {
   const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : '0.0';
   const alpha = 0;
   const beta = 10;
-  const bayesianScore = ((wins + alpha) / (wins + losses + alpha + beta) * 100).toFixed(1);
+  const bayesianScore = ((wins + alpha) / (wins + losses + alpha + beta)).toFixed(3);
 
   return (
     <div className="game-container">
@@ -1533,7 +1618,7 @@ const Game = () => {
         </div>
         <div className="stat-item">
           <span className="stat-label">Bayesian Score:</span>
-          <span className="stat-value">{bayesianScore}%</span>
+          <span className="stat-value">{bayesianScore}</span>
         </div>
       </div>
 
@@ -1761,16 +1846,46 @@ const Game = () => {
             {(() => {
               const cardsOnBoard = playerCards.length + dealerCards.length;
               const cardsRemaining = 52 - cardsOnBoard;
-              const deckPercentSelected = cardsRemaining > 0 
-                ? ((selectedCards.size / cardsRemaining) * 100).toFixed(1) 
-                : '0.0';
+              const percentSelected = cardsRemaining > 0 
+                ? ((selectedCards.size / cardsRemaining) * 100) 
+                : 0;
+              const percentSelectedStr = percentSelected.toFixed(1);
+              
+              // Calculate expected cards for dealer: 1/(% selected) - 1
+              // Convert percentage to decimal (divide by 100)
+              const percentAsDecimal = percentSelected / 100;
+              const expectedCardsForDealer = percentAsDecimal > 0 
+                ? ((1 / percentAsDecimal) - 1).toFixed(1)
+                : '∞';
+              
+              // Calculate tail end probability
+              // d = number of cards dealer has remaining to 8
+              const d = 8 - dealerCards.length;
+              let tailEndProbability;
+              if (d <= 0) {
+                tailEndProbability = 1.0;
+              } else {
+                // Tail probability = (1-p)^(d+1) + (1-p)^(d+2) + ...
+                // This is an infinite geometric series: sum = (1-p)^(d+1) / p
+                const oneMinusP = 1 - percentAsDecimal;
+                if (percentAsDecimal > 0) {
+                  tailEndProbability = Math.pow(oneMinusP, d + 1) / percentAsDecimal;
+                } else {
+                  // If p = 0, then (1-p) = 1, so sum diverges to infinity
+                  // But in practice, if nothing is selected, dealer will always get more than 8
+                  tailEndProbability = 1.0;
+                }
+              }
+              const tailEndProbabilityStr = tailEndProbability.toFixed(3);
               
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div>Currently including {selectedCards.size} cards</div>
                   <div>{cardsRemaining} cards remaining in the deck</div>
-                  <div>Deck {deckPercentSelected}% selected</div>
+                  <div>{percentSelectedStr}% selected</div>
+                  <div>Expected {expectedCardsForDealer} cards for dealer</div>
                   <div>Dealer has {dealerCards.length} cards</div>
+                  <div>Tail end probability: {tailEndProbabilityStr}</div>
                 </div>
               );
             })()}

@@ -19,7 +19,7 @@ const Home = () => {
   const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : '0.0';
   const alpha = 0;
   const beta = 10;
-  const bayesianScore = ((wins + alpha) / (wins + losses + alpha + beta) * 100).toFixed(1);
+  const bayesianScore = ((wins + alpha) / (wins + losses + alpha + beta)).toFixed(3);
 
   return (
     <>
@@ -43,7 +43,7 @@ const Home = () => {
             </div>
             <div className="stat-item">
               <span className="stat-label">Bayesian Score:</span>
-              <span className="stat-value">{bayesianScore}%</span>
+              <span className="stat-value">{bayesianScore}</span>
             </div>
           </div>
         </div>
