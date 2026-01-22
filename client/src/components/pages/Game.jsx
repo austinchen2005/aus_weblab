@@ -41,18 +41,50 @@ const Game = () => {
   const [grayedOutRows, setGrayedOutRows] = useState(new Set()); // Set of suits that are fully grayed
   const [grayedOutColumns, setGrayedOutColumns] = useState(new Set()); // Set of ranks that are fully grayed
   
-  // Play card dealing sound
-  // Creates a new Audio instance each time to allow overlapping sounds
-  const playDealSound = () => {
-    try {
+  // Audio pool for reliable playback (preloaded and ready)
+  const audioPoolRef = useRef([]);
+  const audioPoolIndexRef = useRef(0);
+  const AUDIO_POOL_SIZE = 5; // Pool of 5 preloaded audio instances
+  
+  // Preload audio pool on mount
+  useEffect(() => {
+    const pool = [];
+    for (let i = 0; i < AUDIO_POOL_SIZE; i++) {
       const audio = new Audio('/card-deal.mp3');
       audio.volume = 0.5;
+      audio.preload = 'auto';
+      // Preload the audio
+      audio.load();
+      pool.push(audio);
+    }
+    audioPoolRef.current = pool;
+  }, []);
+  
+  // Play card dealing sound using preloaded audio pool
+  const playDealSound = () => {
+    try {
+      const pool = audioPoolRef.current;
+      if (pool.length === 0) {
+        // Fallback: create new audio if pool not ready
+        const audio = new Audio('/card-deal.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+        return;
+      }
+      
+      // Get next audio from pool (round-robin)
+      const audio = pool[audioPoolIndexRef.current];
+      audioPoolIndexRef.current = (audioPoolIndexRef.current + 1) % pool.length;
+      
+      // Reset to start and play
+      audio.currentTime = 0;
       audio.play().catch(err => {
-        // Ignore errors (e.g., if user hasn't interacted with page yet)
-        console.log('Could not play sound:', err);
+        // Silently handle errors (browser autoplay policies, etc.)
+        // console.log('Could not play sound:', err);
       });
     } catch (err) {
-      console.log('Could not create audio:', err);
+      // Silently handle errors
+      // console.log('Could not play sound:', err);
     }
   };
   
@@ -62,6 +94,10 @@ const Game = () => {
   const dealerCardsRef = useRef([]);
   const selectedCardsRef = useRef(new Set());
   const grayedOutCardsRef = useRef(new Set());
+  
+  // Ref for throttling dealer hand evaluation
+  const dealerHandEvaluationTimeoutRef = useRef(null);
+  const lastDealerHandEvaluationRef = useRef(0);
   
   // Sync refs with state
   useEffect(() => {
@@ -100,15 +136,55 @@ const Game = () => {
     }
   }, [playerCards]);
 
-  // Update dealer hand whenever dealer cards change
+  // Update dealer hand whenever dealer cards change (THROTTLED for performance)
   useEffect(() => {
-    if (dealerCards.length > 0) {
+    // Clear any pending evaluation
+    if (dealerHandEvaluationTimeoutRef.current) {
+      clearTimeout(dealerHandEvaluationTimeoutRef.current);
+    }
+    
+    if (dealerCards.length === 0) {
+      setDealerHand(null);
+      return;
+    }
+    
+    // Throttle evaluation: only evaluate every 3 cards or every 500ms during dealing
+    // This prevents evaluating all combinations on every single card deal
+    const shouldThrottle = isDealing || isDealerDrawing;
+    const cardCount = dealerCards.length;
+    const timeSinceLastEval = Date.now() - lastDealerHandEvaluationRef.current;
+    
+    if (shouldThrottle) {
+      // During dealing: evaluate every 3 cards or every 500ms, whichever comes first
+      const shouldEvaluate = (cardCount % 3 === 0) || (timeSinceLastEval > 500);
+      
+      if (shouldEvaluate) {
+        // Evaluate immediately
+        const hand = findBestHandFromCards(dealerCards);
+        setDealerHand(hand);
+        lastDealerHandEvaluationRef.current = Date.now();
+      } else {
+        // Schedule evaluation after a delay
+        dealerHandEvaluationTimeoutRef.current = setTimeout(() => {
+          const hand = findBestHandFromCards(dealerCards);
+          setDealerHand(hand);
+          lastDealerHandEvaluationRef.current = Date.now();
+        }, 500);
+      }
+    } else {
+      // Not dealing: evaluate immediately
       const hand = findBestHandFromCards(dealerCards);
       setDealerHand(hand);
-    } else {
-      setDealerHand(null);
+      lastDealerHandEvaluationRef.current = Date.now();
     }
-  }, [dealerCards]);
+    
+    // Cleanup
+    return () => {
+      if (dealerHandEvaluationTimeoutRef.current) {
+        clearTimeout(dealerHandEvaluationTimeoutRef.current);
+      }
+    };
+  }, [dealerCards, isDealing, isDealerDrawing]);
   const [selectedColumns, setSelectedColumns] = useState(new Set()); // Store selected rank columns
   const [selectedRows, setSelectedRows] = useState(new Set()); // Store selected suit rows
   const [dragStart, setDragStart] = useState(null); // {rank, suit} for drag selection start
@@ -212,33 +288,77 @@ const Game = () => {
     return findBestHand(cards);
   };
 
-  // Find the best 5-card hand from a larger set of cards
+  // Find the best 5-card hand from a larger set of cards (OPTIMIZED: checks best hands first, stops early)
   const findBestHand = (cards) => {
     if (cards.length < 5) return null;
     if (cards.length === 5) return evaluatePokerHand(cards);
     
-    // Generate all combinations of 5 cards from the set
-    const combinations = [];
-    const generateCombinations = (arr, size, start, combo) => {
-      if (combo.length === size) {
-        combinations.push([...combo]);
-        return;
-      }
-      for (let i = start; i < arr.length; i++) {
-        combo.push(arr[i]);
-        generateCombinations(arr, size, i + 1, combo);
-        combo.pop();
-      }
-    };
+    // For small sets, do full search with early termination
+    if (cards.length <= 10) {
+      let bestHand = null;
+      let bestValue = -1;
+      let bestRank = -1;
+      
+      const generateAll = (arr, size, start, combo) => {
+        // Early termination: if we found royal flush, stop
+        if (bestValue >= 10) return;
+        
+        if (combo.length === size) {
+          const handEval = evaluatePokerHand([...combo]);
+          if (handEval) {
+            const comparison = compareHands(handEval.value, handEval.rank, bestValue, bestRank);
+            if (comparison > 0) {
+              bestHand = handEval;
+              bestValue = handEval.value;
+              bestRank = handEval.rank;
+            }
+          }
+          return;
+        }
+        for (let i = start; i < arr.length; i++) {
+          combo.push(arr[i]);
+          generateAll(arr, size, i + 1, combo);
+          combo.pop();
+          if (bestValue >= 10) return;
+        }
+      };
+      generateAll(cards, 5, 0, []);
+      return bestHand;
+    }
     
-    generateCombinations(cards, 5, 0, []);
+    // Convert cards to values
+    const cardValues = cards.map(card => {
+      const rank = card.rank;
+      let value;
+      if (rank === 'A') value = 14;
+      else if (rank === 'K') value = 13;
+      else if (rank === 'Q') value = 12;
+      else if (rank === 'J') value = 11;
+      else value = parseInt(rank, 10);
+      return { value, suit: card.suit, rank: card.rank, original: card };
+    });
     
-    // Evaluate all combinations and find the best one
+    // Group by suit and rank
+    const bySuit = {};
+    const byRank = {};
+    cardValues.forEach(c => {
+      if (!bySuit[c.suit]) bySuit[c.suit] = [];
+      bySuit[c.suit].push(c);
+      if (!byRank[c.value]) byRank[c.value] = [];
+      byRank[c.value].push(c);
+    });
+    
     let bestHand = null;
     let bestValue = -1;
     let bestRank = -1;
     
-    for (const combo of combinations) {
+    // Helper: only check if this hand type could beat current best
+    const shouldCheckHandType = (handValue) => {
+      return bestValue < handValue;
+    };
+    
+    // Helper: evaluate and update best if better
+    const tryHand = (combo) => {
       const handEval = evaluatePokerHand(combo);
       if (handEval) {
         const comparison = compareHands(handEval.value, handEval.rank, bestValue, bestRank);
@@ -246,8 +366,197 @@ const Game = () => {
           bestHand = handEval;
           bestValue = handEval.value;
           bestRank = handEval.rank;
+          return true;
         }
       }
+      return false;
+    };
+    
+    // 1. ROYAL FLUSH (value 10) - Check straight flushes, stop if found
+    if (shouldCheckHandType(10)) {
+      for (const suit in bySuit) {
+        if (bySuit[suit].length >= 5) {
+          const flushCards = bySuit[suit].sort((a, b) => a.value - b.value);
+          // Check for straight flush (including royal)
+          const values = flushCards.map(c => c.value);
+          for (let i = 0; i <= values.length - 5; i++) {
+            const straight = values.slice(i, i + 5);
+            // Check if consecutive (or wheel)
+            let isStraight = true;
+            for (let j = 1; j < 5; j++) {
+              if (straight[j] !== straight[j-1] + 1) {
+                // Check for wheel (A-2-3-4-5)
+                if (j === 4 && straight[0] === 2 && straight[4] === 14) {
+                  isStraight = true;
+                } else {
+                  isStraight = false;
+                  break;
+                }
+              }
+            }
+            if (isStraight) {
+              const combo = flushCards.slice(i, i + 5).map(c => c.original);
+              if (tryHand(combo) && bestValue >= 10) return bestHand; // Royal/straight flush found
+            }
+          }
+        }
+      }
+    }
+    
+    // 2. FOUR OF A KIND (value 8) - Only check if we haven't found better
+    if (shouldCheckHandType(8)) {
+      const quads = [];
+      for (const rank in byRank) {
+        if (byRank[rank].length >= 4) {
+          quads.push({ rank: parseInt(rank), cards: byRank[rank] });
+        }
+      }
+      quads.sort((a, b) => b.rank - a.rank);
+      
+      for (const quad of quads) {
+        const kickers = cardValues.filter(c => c.value !== quad.rank).sort((a, b) => b.value - a.value);
+        if (kickers.length > 0) {
+          const combo = [...quad.cards.slice(0, 4), kickers[0]].map(c => c.original);
+          if (tryHand(combo) && bestValue >= 8) break; // Found best possible four of a kind
+        }
+      }
+    }
+    
+    // 3. FULL HOUSE (value 7) - Only check if we haven't found better
+    if (shouldCheckHandType(7)) {
+      const trips = [];
+      const pairs = [];
+      for (const rank in byRank) {
+        if (byRank[rank].length >= 3) trips.push({ rank: parseInt(rank), cards: byRank[rank] });
+        if (byRank[rank].length >= 2) pairs.push({ rank: parseInt(rank), cards: byRank[rank] });
+      }
+      trips.sort((a, b) => b.rank - a.rank);
+      pairs.sort((a, b) => b.rank - a.rank);
+      
+      for (const trip of trips) {
+        for (const pair of pairs) {
+          if (trip.rank !== pair.rank) {
+            const combo = [...trip.cards.slice(0, 3), ...pair.cards.slice(0, 2)].map(c => c.original);
+            if (tryHand(combo)) {
+              // Found a full house, check if it's the best possible
+              if (bestValue >= 7 && bestRank >= trip.rank) break;
+            }
+          }
+        }
+        if (bestValue >= 7) break;
+      }
+    }
+    
+    // 4. FLUSH (value 6) - Only check if we haven't found better
+    if (shouldCheckHandType(6)) {
+      for (const suit in bySuit) {
+        if (bySuit[suit].length >= 5) {
+          const flushCards = bySuit[suit].sort((a, b) => b.value - a.value);
+          // Take top 5 cards (best flush)
+          const combo = flushCards.slice(0, 5).map(c => c.original);
+          if (tryHand(combo) && bestValue >= 6) break; // Found best possible flush
+        }
+      }
+    }
+    
+    // 5. STRAIGHT (value 5) - Only check if we haven't found better
+    if (shouldCheckHandType(5)) {
+      const sortedValues = [...cardValues].sort((a, b) => a.value - b.value);
+      const uniqueValues = [...new Set(sortedValues.map(c => c.value))];
+      
+      // Check for straights
+      for (let i = 0; i <= uniqueValues.length - 5; i++) {
+        const straightValues = uniqueValues.slice(i, i + 5);
+        let isStraight = true;
+        for (let j = 1; j < 5; j++) {
+          if (straightValues[j] !== straightValues[j-1] + 1) {
+            // Check for wheel
+            if (j === 4 && straightValues[0] === 2 && straightValues[4] === 14) {
+              isStraight = true;
+            } else {
+              isStraight = false;
+              break;
+            }
+          }
+        }
+        if (isStraight) {
+          // Get one card of each rank for the straight
+          const combo = [];
+          for (const val of straightValues) {
+            const card = sortedValues.find(c => c.value === val);
+            if (card) combo.push(card.original);
+          }
+          if (combo.length === 5 && tryHand(combo) && bestValue >= 5) break;
+        }
+      }
+    }
+    
+    // 6. THREE OF A KIND (value 4) - Only check if we haven't found better
+    if (shouldCheckHandType(4)) {
+      const trips = [];
+      for (const rank in byRank) {
+        if (byRank[rank].length >= 3) {
+          trips.push({ rank: parseInt(rank), cards: byRank[rank] });
+        }
+      }
+      trips.sort((a, b) => b.rank - a.rank);
+      
+      for (const trip of trips) {
+        const kickers = cardValues.filter(c => c.value !== trip.rank).sort((a, b) => b.value - a.value);
+        if (kickers.length >= 2) {
+          const combo = [...trip.cards.slice(0, 3), kickers[0], kickers[1]].map(c => c.original);
+          if (tryHand(combo) && bestValue >= 4 && bestRank >= trip.rank) break;
+        }
+      }
+    }
+    
+    // 7. TWO PAIR (value 3) - Only check if we haven't found better
+    if (shouldCheckHandType(3)) {
+      const pairs = [];
+      for (const rank in byRank) {
+        if (byRank[rank].length >= 2) {
+          pairs.push({ rank: parseInt(rank), cards: byRank[rank] });
+        }
+      }
+      pairs.sort((a, b) => b.rank - a.rank);
+      
+      for (let i = 0; i < pairs.length - 1; i++) {
+        for (let j = i + 1; j < pairs.length; j++) {
+          const kickers = cardValues.filter(c => c.value !== pairs[i].rank && c.value !== pairs[j].rank)
+            .sort((a, b) => b.value - a.value);
+          if (kickers.length > 0) {
+            const combo = [...pairs[i].cards.slice(0, 2), ...pairs[j].cards.slice(0, 2), kickers[0]].map(c => c.original);
+            if (tryHand(combo) && bestValue >= 3) break;
+          }
+        }
+        if (bestValue >= 3) break;
+      }
+    }
+    
+    // 8. ONE PAIR (value 2) - Only check if we haven't found better
+    if (shouldCheckHandType(2)) {
+      const pairs = [];
+      for (const rank in byRank) {
+        if (byRank[rank].length >= 2) {
+          pairs.push({ rank: parseInt(rank), cards: byRank[rank] });
+        }
+      }
+      pairs.sort((a, b) => b.rank - a.rank);
+      
+      for (const pair of pairs) {
+        const kickers = cardValues.filter(c => c.value !== pair.rank).sort((a, b) => b.value - a.value);
+        if (kickers.length >= 3) {
+          const combo = [...pair.cards.slice(0, 2), ...kickers.slice(0, 3)].map(c => c.original);
+          if (tryHand(combo) && bestValue >= 2 && bestRank >= pair.rank) break;
+        }
+      }
+    }
+    
+    // 9. HIGH CARD (value 1) - Only if nothing better found
+    if (bestHand === null || bestValue < 1) {
+      const sortedCards = [...cardValues].sort((a, b) => b.value - a.value);
+      const combo = sortedCards.slice(0, 5).map(c => c.original);
+      tryHand(combo);
     }
     
     return bestHand;
@@ -1007,12 +1316,11 @@ const Game = () => {
     // Deal first card after showing message
     const dealNextDealerCard = () => {
       if (cardsDealt >= cardsNeeded || currentDeck.length === 0) {
-        // Done dealing - sort final cards before evaluating
-        const sortedDealerCards = sortCards(currentDealerCards);
+        // Done dealing - cards remain unsorted
         deckRef.current = currentDeck;
-        dealerCardsRef.current = sortedDealerCards;
+        dealerCardsRef.current = currentDealerCards;
         setDeck(currentDeck);
-        setDealerCards(sortedDealerCards);
+        setDealerCards(currentDealerCards);
         setIsDealerDrawing(false);
         setShowDealerDrawMessage(false);
         
@@ -1020,7 +1328,7 @@ const Game = () => {
         setNewlyDealtCards(new Set());
         
         // Now evaluate the game
-        evaluateGame(playerCards, sortedDealerCards);
+        evaluateGame(playerCards, currentDealerCards);
         return;
       }
       
