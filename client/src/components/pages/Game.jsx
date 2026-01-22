@@ -219,6 +219,34 @@ const Game = () => {
     });
   };
 
+  // Sort cards by suit only
+  const sortCardsBySuit = (cards) => {
+    const suitOrder = { '♥': 0, '♦': 1, '♣': 2, '♠': 3 };
+    const rankOrder = { 'A': 0, 'K': 1, 'Q': 2, 'J': 3, '10': 4, '9': 5, '8': 6, '7': 7, '6': 8, '5': 9, '4': 10, '3': 11, '2': 12 };
+    
+    return [...cards].sort((a, b) => {
+      // Sort by suit only
+      const suitDiff = suitOrder[a.suit] - suitOrder[b.suit];
+      if (suitDiff !== 0) return suitDiff;
+      // If same suit, maintain original order (or sort by rank as tiebreaker)
+      return rankOrder[a.rank] - rankOrder[b.rank];
+    });
+  };
+
+  // Sort cards by rank only (high to low)
+  const sortCardsByRank = (cards) => {
+    const rankOrder = { 'A': 0, 'K': 1, 'Q': 2, 'J': 3, '10': 4, '9': 5, '8': 6, '7': 7, '6': 8, '5': 9, '4': 10, '3': 11, '2': 12 };
+    const suitOrder = { '♥': 0, '♦': 1, '♣': 2, '♠': 3 };
+    
+    return [...cards].sort((a, b) => {
+      // Sort by rank only (high to low)
+      const rankDiff = rankOrder[a.rank] - rankOrder[b.rank];
+      if (rankDiff !== 0) return rankDiff;
+      // If same rank, maintain original order (or sort by suit as tiebreaker)
+      return suitOrder[a.suit] - suitOrder[b.suit];
+    });
+  };
+
   // Shuffle deck
   const shuffleDeck = (deck) => {
     const shuffled = [...deck];
@@ -1316,11 +1344,12 @@ const Game = () => {
     // Deal first card after showing message
     const dealNextDealerCard = () => {
       if (cardsDealt >= cardsNeeded || currentDeck.length === 0) {
-        // Done dealing - cards remain unsorted
+        // Done dealing - sort final cards before evaluating
+        const sortedDealerCards = sortCards(currentDealerCards);
         deckRef.current = currentDeck;
-        dealerCardsRef.current = currentDealerCards;
+        dealerCardsRef.current = sortedDealerCards;
         setDeck(currentDeck);
-        setDealerCards(currentDealerCards);
+        setDealerCards(sortedDealerCards);
         setIsDealerDrawing(false);
         setShowDealerDrawMessage(false);
         
@@ -1328,7 +1357,7 @@ const Game = () => {
         setNewlyDealtCards(new Set());
         
         // Now evaluate the game
-        evaluateGame(playerCards, currentDealerCards);
+        evaluateGame(playerCards, sortedDealerCards);
         return;
       }
       
@@ -1478,6 +1507,13 @@ const Game = () => {
     );
   };
 
+  // Calculate win rate and Bayesian score
+  const totalGames = wins + losses;
+  const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : '0.0';
+  const alpha = 0;
+  const beta = 10;
+  const bayesianScore = ((wins + alpha) / (wins + losses + alpha + beta) * 100).toFixed(1);
+
   return (
     <div className="game-container">
       <h1>Poker Game</h1>
@@ -1490,6 +1526,14 @@ const Game = () => {
         <div className="stat-item">
           <span className="stat-label">Losses:</span>
           <span className="stat-value">{losses}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Win Rate:</span>
+          <span className="stat-value">{winRate}%</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Bayesian Score:</span>
+          <span className="stat-value">{bayesianScore}%</span>
         </div>
       </div>
 
@@ -1547,7 +1591,34 @@ const Game = () => {
         </div>
 
         <div className="cards-section">
-          <h2>Dealer Cards</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+            <h2>Dealer Cards</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+              <span>Sort by:</span>
+              <button 
+                className="sort-btn"
+                onClick={() => {
+                  const sorted = sortCardsBySuit(dealerCards);
+                  dealerCardsRef.current = sorted;
+                  setDealerCards(sorted);
+                }}
+                disabled={dealerCards.length === 0}
+              >
+                Suit
+              </button>
+              <button 
+                className="sort-btn"
+                onClick={() => {
+                  const sorted = sortCardsByRank(dealerCards);
+                  dealerCardsRef.current = sorted;
+                  setDealerCards(sorted);
+                }}
+                disabled={dealerCards.length === 0}
+              >
+                Rank
+              </button>
+            </div>
+          </div>
           {dealerHand && (
             <div className="hand-name">Hand: {dealerHand.name}</div>
           )}
@@ -1568,9 +1639,6 @@ const Game = () => {
         <div className={`rule-matrix-container ${isDealing ? 'dealing-phase' : ''}`}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <h2>Select Cards to Include</h2>
-            <span className="currently-including" style={{ fontSize: '1rem', color: '#666' }}>
-              Currently including {selectedCards.size} cards
-            </span>
           </div>
           <div 
             className={`card-matrix ${isDealing ? 'disabled' : ''}`}
@@ -1686,6 +1754,26 @@ const Game = () => {
                 </div>
               );
             })}
+          </div>
+          
+          {/* Statistics below matrix */}
+          <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px', fontSize: '0.95rem' }}>
+            {(() => {
+              const cardsOnBoard = playerCards.length + dealerCards.length;
+              const cardsRemaining = 52 - cardsOnBoard;
+              const deckPercentSelected = cardsRemaining > 0 
+                ? ((selectedCards.size / cardsRemaining) * 100).toFixed(1) 
+                : '0.0';
+              
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div>Currently including {selectedCards.size} cards</div>
+                  <div>{cardsRemaining} cards remaining in the deck</div>
+                  <div>Deck {deckPercentSelected}% selected</div>
+                  <div>Dealer has {dealerCards.length} cards</div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

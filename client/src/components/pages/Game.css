@@ -98,6 +98,29 @@
   background-color: #2980b9;
 }
 
+.sort-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  background-color: #ecf0f1;
+  color: #2c3e50;
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Proza Libre', sans-serif;
+}
+
+.sort-btn:hover:not(:disabled) {
+  background-color: #d5dbdb;
+  border-color: #95a5a6;
+  transform: translateY(-1px);
+}
+
+.sort-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .dealer-draw-message {
   text-align: center;
   font-size: 1.5rem;

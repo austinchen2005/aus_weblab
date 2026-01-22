@@ -4,6 +4,17 @@ import "./Help.css";
 
 const Help = () => {
   const [showRules, setShowRules] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleResetProfile = () => {
+    // Reset wins and losses in localStorage
+    localStorage.setItem('gameWins', '0');
+    localStorage.setItem('gameLosses', '0');
+    // Close the popup
+    setShowResetConfirm(false);
+    // Reload the page to update stats everywhere
+    window.location.reload();
+  };
 
   const rulesText = `RULES:
 This is a single player poker-like game!
@@ -32,6 +43,37 @@ You win if your 5-card poker hand strictly beats the dealer's best 5-card poker 
         {showRules && (
           <div className="rules-display">
             <pre className="rules-text">{rulesText}</pre>
+          </div>
+        )}
+
+        <button 
+          className="reset-profile-btn" 
+          onClick={() => setShowResetConfirm(true)}
+        >
+          Reset Profile
+        </button>
+
+        {showResetConfirm && (
+          <div className="popup-overlay" onClick={() => setShowResetConfirm(false)}>
+            <div className="popup-content" onClick={(e) => e.stopPropagation()}>
+              <p className="popup-message">
+                Are you sure you want to reset your profile? You will reset your wins and losses and all achievements.
+              </p>
+              <div className="popup-buttons">
+                <button 
+                  className="popup-btn popup-btn-no" 
+                  onClick={() => setShowResetConfirm(false)}
+                >
+                  No
+                </button>
+                <button 
+                  className="popup-btn popup-btn-yes" 
+                  onClick={handleResetProfile}
+                >
+                  Yes
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
