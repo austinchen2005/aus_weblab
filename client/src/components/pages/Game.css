@@ -1,0 +1,473 @@
+.game-container {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(44, 62, 80, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(231, 76, 60, 0.02) 0%, transparent 50%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(44, 62, 80, 0.01) 2px,
+      rgba(44, 62, 80, 0.01) 4px
+    );
+}
+
+/* Card suit pattern background for Play page */
+.game-container::before {
+  content: '♠';
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  font-size: 3rem;
+  color: rgba(44, 62, 80, 0.04);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.game-container::after {
+  content: '♥';
+  position: absolute;
+  top: 60px;
+  right: 40px;
+  font-size: 3.5rem;
+  color: rgba(231, 76, 60, 0.04);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.game-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* h1 uses default Proza Libre from body */
+
+.stats-display {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #ecf0f1;
+  border-radius: 8px;
+}
+
+.stat-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.stat-label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.stat-value {
+  font-weight: bold;
+  color: #3498db;
+  font-size: 1.2rem;
+}
+
+.game-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.start-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.start-btn:hover {
+  background-color: #2980b9;
+}
+
+.dealer-draw-message {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2c3e50;
+  background-color: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: 8px;
+  padding: 1rem 2rem;
+  margin: 1rem 0;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.game-result {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 8px;
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-result.win {
+  background-color: #d4edda;
+  color: #155724;
+  border: 2px solid #c3e6cb;
+}
+
+.game-result.lose {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 2px solid #f5c6cb;
+}
+
+.game-result.tie {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 2px solid #ffeaa7;
+}
+
+.cards-container {
+  margin-top: 2rem;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-around;
+}
+
+.cards-section {
+  flex: 1;
+  min-width: 300px;
+}
+
+.cards-section h2 {
+  color: #2c3e50;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  /* Uses default Proza Libre from body */
+}
+
+.hand-name {
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background-color: #ecf0f1;
+  border-radius: 4px;
+}
+
+.cards-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 200px;
+}
+
+.card {
+  width: 60px;
+  height: 84px;
+  background-color: white;
+  border: 2px solid #2c3e50;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.card.newly-dealt {
+  background-color: #ffeb3b;
+  border-color: #fbc02d;
+  box-shadow: 0 4px 12px rgba(255, 235, 59, 0.6);
+  animation: highlightPulse 0.5s ease;
+}
+
+@keyframes highlightPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(var(--card-pop-scale, 1.15));
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.card-rank {
+  font-size: 1rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+}
+
+.card-rank.red {
+  color: #e74c3c;
+}
+
+.card-suit {
+  font-size: 1.25rem;
+  color: #2c3e50;
+}
+
+.card-suit.red {
+  color: #e74c3c;
+}
+
+/* Popup Styles */
+.rule-matrix-container {
+  margin-top: 3rem;
+  padding: 2rem;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transition: opacity 0.3s ease;
+}
+
+.rule-matrix-container.dealing-phase {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.rule-matrix-container h2 {
+  margin: 0 0 1.5rem 0;
+  color: #2c3e50;
+  font-size: 1.5rem;
+  text-align: center;
+  /* Uses default Proza Libre from body */
+}
+
+.rule-matrix-container .currently-including {
+  /* Uses default Proza Libre from body */
+}
+
+/* Card Matrix Styles */
+.card-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background-color: #ecf0f1;
+  padding: 4px;
+  border-radius: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  transition: opacity 0.3s ease;
+}
+
+.card-matrix.disabled {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.matrix-header {
+  display: grid;
+  grid-template-columns: 60px repeat(13, 80px);
+  gap: 2px;
+}
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: 60px repeat(13, 80px);
+  gap: 2px;
+}
+
+.matrix-cell {
+  background-color: white;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.matrix-cell.header-cell {
+  background-color: #34495e;
+  color: white;
+  font-weight: bold;
+  font-size: 1.2rem;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.matrix-cell.header-cell.column-selected {
+  background-color: #fbc02d;
+  color: #2c3e50;
+}
+
+.matrix-cell.header-cell.row-selected {
+  background-color: #fbc02d;
+  color: #2c3e50;
+}
+
+.column-toggle-btn,
+.row-toggle-btn,
+.all-toggle-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font-weight: bold;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.column-toggle-btn:hover,
+.row-toggle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.matrix-cell.header-cell.column-selected .column-toggle-btn:hover,
+.matrix-cell.header-cell.row-selected .row-toggle-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.matrix-cell.card-cell {
+  cursor: pointer;
+  border: 2px solid #bdc3c7;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.matrix-cell.card-cell:hover {
+  border-color: #3498db;
+  transform: scale(1.05);
+}
+
+.matrix-cell.card-cell.selected {
+  background-color: #ffeb3b;
+  border-color: #fbc02d;
+  box-shadow: 0 2px 8px rgba(255, 235, 59, 0.5);
+}
+
+.matrix-cell.card-cell.drag-selected {
+  background-color: #fff59d;
+  border-color: #fbc02d;
+  box-shadow: 0 2px 8px rgba(255, 235, 59, 0.3);
+}
+
+.matrix-cell.card-cell.selected.drag-selected {
+  background-color: #ffeb3b;
+  border-color: #fbc02d;
+  box-shadow: 0 2px 8px rgba(255, 235, 59, 0.5);
+}
+
+.matrix-cell.card-cell.drag-unselected {
+  background-color: #ffcccc;
+  border-color: #ff9999;
+  box-shadow: 0 2px 8px rgba(255, 153, 153, 0.3);
+}
+
+.matrix-cell.card-cell.selected.drag-unselected {
+  background-color: #ffaaaa;
+  border-color: #ff6666;
+  box-shadow: 0 2px 8px rgba(255, 102, 102, 0.5);
+}
+
+.matrix-card-rank {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+}
+
+.matrix-card-rank.red {
+  color: #e74c3c;
+}
+
+.matrix-card-suit {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+}
+
+.matrix-card-suit.red {
+  color: #e74c3c;
+}
+
+/* Board card styles - grayed out and non-interactive */
+.matrix-cell.card-cell.board-card {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.matrix-cell.card-cell.board-card:hover {
+  transform: none;
+  border-color: #d0d0d0;
+}
+
+.matrix-card-rank.grayed-out,
+.matrix-card-suit.grayed-out {
+  color: #999999 !important;
+  opacity: 0.6;
+}
+
+.matrix-cell.header-cell.board-column {
+  opacity: 0.5;
+}
+
+.matrix-cell.header-cell.board-column .column-toggle-btn:disabled,
+.matrix-cell.header-cell .row-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

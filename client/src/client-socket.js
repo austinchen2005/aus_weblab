@@ -1,7 +1,16 @@
-import socketIOClient from "socket.io-client";
-import { post } from "./utilities";
-const endpoint = window.location.hostname + ":" + window.location.port;
-export const socket = socketIOClient(endpoint);
-socket.on("connect", () => {
-  post("/api/initsocket", { socketid: socket.id });
-});
+// Socket.IO disabled for now - not needed for the game
+// import socketIOClient from "socket.io-client";
+// import { post } from "./utilities";
+// const endpoint = window.location.hostname + ":" + window.location.port;
+// export const socket = socketIOClient(endpoint);
+// socket.on("connect", () => {
+//   post("/api/initsocket", { socketid: socket.id });
+// });
+
+// Dummy socket object to prevent errors
+export const socket = {
+  id: "disabled",
+  on: () => {},
+  emit: () => {},
+  disconnect: () => {},
+};
