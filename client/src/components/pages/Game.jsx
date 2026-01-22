@@ -61,6 +61,7 @@ const Game = () => {
   const playerCardsRef = useRef([]);
   const dealerCardsRef = useRef([]);
   const selectedCardsRef = useRef(new Set());
+  const grayedOutCardsRef = useRef(new Set());
   
   // Sync refs with state
   useEffect(() => {
@@ -78,6 +79,10 @@ const Game = () => {
   useEffect(() => {
     selectedCardsRef.current = selectedCards;
   }, [selectedCards]);
+  
+  useEffect(() => {
+    grayedOutCardsRef.current = grayedOutCards;
+  }, [grayedOutCards]);
 
   // Initialize CSS variable for card pop scale
   useEffect(() => {
@@ -732,8 +737,8 @@ const Game = () => {
       const newDeck = deck.slice(1);
       deckRef.current = newDeck;
       
-      // Calculate all state changes first
-      const grayedState = calculateGrayedOutState(firstCard, grayedOutCards);
+      // Calculate all state changes first (use ref to get current state)
+      const grayedState = calculateGrayedOutState(firstCard, grayedOutCardsRef.current);
       const cardKey = `${firstCard.rank}-${firstCard.suit}`;
       const isSelected = selectedCardsRef.current.has(cardKey);
       
@@ -761,6 +766,19 @@ const Game = () => {
             return newCols;
           });
         }
+        
+        // Remove card from selectedCards if it was selected (since it's now on the board)
+        setSelectedCards(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(cardKey)) {
+            newSet.delete(cardKey);
+            // Update ref immediately
+            selectedCardsRef.current = newSet;
+            // Update column and row selection states after removing card
+            updateColumnRowStates(newSet);
+          }
+          return newSet;
+        });
         
         if (isSelected) {
           // Card is selected - give to player and stop
@@ -850,8 +868,8 @@ const Game = () => {
       const newDeck = deck.slice(1);
       deckRef.current = newDeck;
       
-      // Calculate all state changes first
-      const grayedState = calculateGrayedOutState(nextCard, grayedOutCards);
+      // Calculate all state changes first (use ref to get current state)
+      const grayedState = calculateGrayedOutState(nextCard, grayedOutCardsRef.current);
       const cardKey = `${nextCard.rank}-${nextCard.suit}`;
       const isSelected = selectedCardsRef.current.has(cardKey);
       
@@ -879,6 +897,19 @@ const Game = () => {
             return newCols;
           });
         }
+        
+        // Remove card from selectedCards if it was selected (since it's now on the board)
+        setSelectedCards(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(cardKey)) {
+            newSet.delete(cardKey);
+            // Update ref immediately
+            selectedCardsRef.current = newSet;
+            // Update column and row selection states after removing card
+            updateColumnRowStates(newSet);
+          }
+          return newSet;
+        });
         
         if (isSelected) {
           // Card is selected - give to player and stop
@@ -1000,8 +1031,9 @@ const Game = () => {
       currentDealerCards.push(card);
       cardsDealt++;
       
-      // Calculate grayed-out state
-      const grayedState = calculateGrayedOutState(card, grayedOutCards);
+      // Calculate grayed-out state (use ref to get current state)
+      const grayedState = calculateGrayedOutState(card, grayedOutCardsRef.current);
+      const cardKey = `${card.rank}-${card.suit}`;
       
       // Update refs
       deckRef.current = currentDeck;
@@ -1031,6 +1063,19 @@ const Game = () => {
             return newCols;
           });
         }
+        
+        // Remove card from selectedCards if it was selected (since it's now on the board)
+        setSelectedCards(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(cardKey)) {
+            newSet.delete(cardKey);
+            // Update ref immediately
+            selectedCardsRef.current = newSet;
+            // Update column and row selection states after removing card
+            updateColumnRowStates(newSet);
+          }
+          return newSet;
+        });
         
         // Highlight newly dealt card (it's at the end)
         const cardIndex = currentDealerCards.length - 1;

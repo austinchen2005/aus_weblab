@@ -80,16 +80,18 @@ export function evaluateHand(cards) {
 
   // Straight Flush
   if (isFlush && isStraight) {
-    let lowRank, highRank;
+    let lowRank, highRank, straightRank;
     if (values[0] === 2 && values[4] === 14) {
-      // Wheel (A-2-3-4-5)
+      // Wheel (A-2-3-4-5) - rank is 5, not 14 (Ace)
       lowRank = 'A';
       highRank = '5';
+      straightRank = 5; // A-5 is the lowest straight
     } else {
       lowRank = valueToRank(values[0]);
       highRank = valueToRank(values[4]);
+      straightRank = values[4]; // Regular straight uses high card
     }
-    return { value: 9, name: `Straight Flush, ${getSuitName(flushSuit)} ${lowRank}-${highRank}`, rank: values[4] };
+    return { value: 9, name: `Straight Flush, ${getSuitName(flushSuit)} ${lowRank}-${highRank}`, rank: straightRank };
   }
 
   // Four of a Kind
@@ -113,16 +115,18 @@ export function evaluateHand(cards) {
 
   // Straight
   if (isStraight) {
-    let lowRank, highRank;
+    let lowRank, highRank, straightRank;
     if (values[0] === 2 && values[4] === 14) {
-      // Wheel (A-2-3-4-5)
+      // Wheel (A-2-3-4-5) - rank is 5, not 14 (Ace)
       lowRank = 'A';
       highRank = '5';
+      straightRank = 5; // A-5 is the lowest straight
     } else {
       lowRank = valueToRank(values[0]);
       highRank = valueToRank(values[4]);
+      straightRank = values[4]; // Regular straight uses high card
     }
-    return { value: 5, name: `Straight, ${lowRank}-${highRank}`, rank: values[4] };
+    return { value: 5, name: `Straight, ${lowRank}-${highRank}`, rank: straightRank };
   }
 
   // Three of a Kind
