@@ -33,26 +33,16 @@ function getOrCreateUser(user) {
 }
 
 function login(req, res) {
-  console.log('Login attempt received');
-  if (!req.body.token) {
-    console.log('No token provided');
-    return res.status(400).send({ err: 'No token provided' });
-  }
-  
   verify(req.body.token)
+    .then((user) => getOrCreateUser(user))
     .then((user) => {
-      console.log('Token verified, user:', user.name);
-      return getOrCreateUser(user);
-    })
-    .then((user) => {
-      console.log('User found/created:', user.name);
       // persist user in the session
       req.session.user = user;
       res.send(user);
     })
     .catch((err) => {
-      console.error(`Failed to log in:`, err);
-      res.status(401).send({ err: err.message || err.toString() });
+      console.log(`Failed to log in: ${err}`);
+      res.status(401).send({ err });
     });
 }
 

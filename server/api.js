@@ -43,59 +43,87 @@ router.post("/initsocket", (req, res) => {
 // | write your API methods below!|
 // |------------------------------|
 
-// Get user stats (wins and losses)
-router.get("/stats", auth.ensureLoggedIn, (req, res) => {
-  res.send({
-    wins: req.user.wins || 0,
-    losses: req.user.losses || 0,
-  });
+// Update user's wins and losses
+router.post("/updateStats", auth.ensureLoggedIn, (req, res) => {
+  const { wins, losses } = req.body;
+  
+  // Update user in database
+  User.findByIdAndUpdate(
+    req.user._id,
+    { 
+      $set: { 
+        wins: wins !== undefined ? wins : req.user.wins,
+        losses: losses !== undefined ? losses : req.user.losses,
+      }
+    },
+    { new: true } // Return updated document
+  )
+    .then((updatedUser) => {
+      // Update session with new user data
+      req.session.user = updatedUser;
+      res.send(updatedUser);
+    })
+    .catch((err) => {
+      console.log(`Error updating stats: ${err}`);
+      res.status(500).send({ err: "Failed to update stats" });
+    });
 });
 
-// Update user stats
-router.post("/stats", auth.ensureLoggedIn, async (req, res) => {
-  try {
-    const { wins, losses } = req.body;
-    const user = await User.findById(req.user._id);
-    
-    if (wins !== undefined) {
-      user.wins = wins;
-    }
-    if (losses !== undefined) {
-      user.losses = losses;
-    }
-    
-    await user.save();
-    res.send({ wins: user.wins, losses: user.losses });
-  } catch (err) {
-    console.log(`Failed to update stats: ${err}`);
-    res.status(500).send({ err });
-  }
+// Increment wins (add 1 to current wins)
+router.post("/incrementWin", auth.ensureLoggedIn, (req, res) => {
+  User.findByIdAndUpdate(
+    req.user._id,
+    { $inc: { wins: 1 } }, // Increment wins by 1
+    { new: true }
+  )
+    .then((updatedUser) => {
+      req.session.user = updatedUser;
+      res.send(updatedUser);
+    })
+    .catch((err) => {
+      console.log(`Error incrementing win: ${err}`);
+      res.status(500).send({ err: "Failed to increment win" });
+    });
 });
 
-// Increment wins
-router.post("/increment-wins", auth.ensureLoggedIn, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    user.wins = (user.wins || 0) + 1;
-    await user.save();
-    res.send({ wins: user.wins, losses: user.losses || 0 });
-  } catch (err) {
-    console.log(`Failed to increment wins: ${err}`);
-    res.status(500).send({ err });
-  }
+// Increment losses (add 1 to current losses)
+router.post("/incrementLoss", auth.ensureLoggedIn, (req, res) => {
+  User.findByIdAndUpdate(
+    req.user._id,
+    { $inc: { losses: 1 } }, // Increment losses by 1
+    { new: true }
+  )
+    .then((updatedUser) => {
+      req.session.user = updatedUser;
+      res.send(updatedUser);
+    })
+    .catch((err) => {
+      console.log(`Error incrementing loss: ${err}`);
+      res.status(500).send({ err: "Failed to increment loss" });
+    });
 });
 
-// Increment losses
-router.post("/increment-losses", auth.ensureLoggedIn, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    user.losses = (user.losses || 0) + 1;
-    await user.save();
-    res.send({ wins: user.wins || 0, losses: user.losses });
-  } catch (err) {
-    console.log(`Failed to increment losses: ${err}`);
-    res.status(500).send({ err });
-  }
+// Update any user field (generic update endpoint)
+router.post("/updateUser", auth.ensureLoggedIn, (req, res) => {
+  const updates = req.body;
+  
+  // Remove fields that shouldn't be updated directly
+  delete updates._id;
+  delete updates.googleid;
+  
+  User.findByIdAndUpdate(
+    req.user._id,
+    { $set: updates },
+    { new: true }
+  )
+    .then((updatedUser) => {
+      req.session.user = updatedUser;
+      res.send(updatedUser);
+    })
+    .catch((err) => {
+      console.log(`Error updating user: ${err}`);
+      res.status(500).send({ err: "Failed to update user" });
+    });
 });
 
 // anything else falls to this "not found" case
@@ -104,4 +132,4 @@ router.all("*", (req, res) => {
   res.status(404).send({ msg: "API route not found" });
 });
 
-module.exports = router;
+module.exports = router;  

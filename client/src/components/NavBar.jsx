@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import "./NavBar.css";
+import Skeleton from "./pages/Skeleton";
 
 const NavBar = () => {
   const location = useLocation();
@@ -52,7 +53,9 @@ const NavBar = () => {
             Settings
           </Link>
         </li>
+        <li><Skeleton /></li>
       </ul>
+
     </nav>
   );
 };
