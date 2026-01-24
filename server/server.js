@@ -64,7 +64,7 @@ app.use(express.json());
 app.use(
   session({
     // TODO: add a SESSION_SECRET string in your .env file, and replace the secret with process.env.SESSION_SECRET
-    secret: "session-secret",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
   })
@@ -106,11 +106,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// hardcode port to 3000 for now
-const port = 3000;
+// Use PORT environment variable for Render, default to 3000 for local development
+const port = process.env.PORT || 3000;
 const server = http.Server(app);
 socketManager.init(server);
 
-server.listen(port, () => {
+// Bind to 0.0.0.0 to allow Render to forward requests (required for Render deployment)
+server.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port: ${port}`);
 });
