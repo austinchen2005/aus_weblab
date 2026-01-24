@@ -1850,13 +1850,12 @@ const Game = () => {
                 ? ((selectedCards.size / cardsRemaining) * 100) 
                 : 0;
               const percentSelectedStr = percentSelected.toFixed(1);
+              const numSelected = selectedCards.size;
               
               // Calculate expected cards for dealer: 1/(% selected) - 1
               // Convert percentage to decimal (divide by 100)
               const percentAsDecimal = percentSelected / 100;
-              const expectedCardsForDealer = percentAsDecimal > 0 
-                ? ((1 / percentAsDecimal) - 1).toFixed(1)
-                : '∞';
+              const expectedCardsForDealer = numSelected > 0 ? ((cardsRemaining + 1) / (numSelected + 1)) - 1 : cardsRemaining;
               
               // Calculate tail end probability
               // d = number of cards dealer has remaining to 8
@@ -1883,7 +1882,7 @@ const Game = () => {
                   <div>Currently including {selectedCards.size} cards</div>
                   <div>{cardsRemaining} cards remaining in the deck</div>
                   <div>{percentSelectedStr}% selected</div>
-                  <div>Expected {expectedCardsForDealer} cards for dealer</div>
+                  <div>Expected {expectedCardsForDealer.toFixed(2)} cards for dealer</div>
                   <div>Dealer has {dealerCards.length} cards</div>
                   <div>Tail end probability: {tailEndProbabilityStr}</div>
                 </div>
