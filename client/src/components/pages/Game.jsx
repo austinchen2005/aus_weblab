@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef, startTransition } from "react";
+import React, { useState, useEffect, useRef, startTransition, useContext } from "react";
 import { evaluateHand } from "../../utils/pokerEvaluator";
 import { getSetting } from "../../utils/gameSettings";
+import { UserContext } from "../App";
+import { get, post } from "../../utilities";
 import "../../utilities.css";
 import "./Game.css";
 
@@ -18,7 +20,21 @@ function compareHands(hand1Value, hand1Rank, hand2Value, hand2Rank) {
   return 0;
 }
 
+// Calculate combination (n choose k) = n! / (k! * (n-k)!)
+function combination(n, k) {
+  if (k > n || k < 0 || n < 0) return 0;
+  if (k === 0 || k === n) return 1;
+  if (k > n - k) k = n - k; // Use symmetry for efficiency
+  
+  let result = 1;
+  for (let i = 0; i < k; i++) {
+    result = result * (n - i) / (i + 1);
+  }
+  return result;
+}
+
 const Game = () => {
+  const { userId, user } = useContext(UserContext);
   const [deck, setDeck] = useState([]);
   const [playerCards, setPlayerCards] = useState([]);
   const [dealerCards, setDealerCards] = useState([]);
@@ -1138,11 +1154,18 @@ const Game = () => {
         setNewlyDealtCards(new Set()); // Clear highlights
         setGameResult("You lose!");
         playLoseSound();
-        setLosses(prevLosses => {
-          const newLosses = prevLosses + 1;
-          localStorage.setItem('gameLosses', newLosses.toString());
-          return newLosses;
-        });
+        
+        // Update losses: send to server if logged in
+        if (userId) {
+          post("/api/incrementLoss")
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+            })
+            .catch((err) => {
+              console.error("Failed to update loss on server:", err);
+            });
+        }
         setGameEnded(true);
         return;
       }
@@ -1271,11 +1294,18 @@ const Game = () => {
         setNewlyDealtCards(new Set()); // Clear highlights
         setGameResult("You lose!");
         playLoseSound();
-        setLosses(prevLosses => {
-          const newLosses = prevLosses + 1;
-          localStorage.setItem('gameLosses', newLosses.toString());
-          return newLosses;
-        });
+        
+        // Update losses: send to server if logged in
+        if (userId) {
+          post("/api/incrementLoss")
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+            })
+            .catch((err) => {
+              console.error("Failed to update loss on server:", err);
+            });
+        }
         setGameEnded(true);
         return;
       }
@@ -1544,28 +1574,49 @@ const Game = () => {
       if (comparison > 0) {
         setGameResult("You win!");
         playWinSound();
-        setWins(prevWins => {
-          const newWins = prevWins + 1;
-          localStorage.setItem('gameWins', newWins.toString());
-          return newWins;
-        });
+        
+        // Update wins: send to server if logged in
+        if (userId) {
+          post("/api/incrementWin")
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+            })
+            .catch((err) => {
+              console.error("Failed to update win on server:", err);
+            });
+        }
       } else if (comparison < 0) {
         setGameResult("You lose!");
         playLoseSound();
-        setLosses(prevLosses => {
-          const newLosses = prevLosses + 1;
-          localStorage.setItem('gameLosses', newLosses.toString());
-          return newLosses;
-        });
+        
+        // Update losses: send to server if logged in
+        if (userId) {
+          post("/api/incrementLoss")
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+            })
+            .catch((err) => {
+              console.error("Failed to update loss on server:", err);
+            });
+        }
       } else {
         // Ties are losses
         setGameResult("You lose! Ties are losses.");
         playLoseSound();
-        setLosses(prevLosses => {
-          const newLosses = prevLosses + 1;
-          localStorage.setItem('gameLosses', newLosses.toString());
-          return newLosses;
-        });
+        
+        // Update losses: send to server if logged in
+        if (userId) {
+          post("/api/incrementLoss")
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+            })
+            .catch((err) => {
+              console.error("Failed to update loss on server:", err);
+            });
+        }
       }
     }
     
@@ -1573,13 +1624,26 @@ const Game = () => {
     setGameEnded(true);
   };
 
-  // Load stats from localStorage
+  // Load stats from server on mount and when userId changes
   useEffect(() => {
-    const savedWins = parseInt(localStorage.getItem('gameWins') || '0', 10);
-    const savedLosses = parseInt(localStorage.getItem('gameLosses') || '0', 10);
-    setWins(savedWins);
-    setLosses(savedLosses);
-  }, []);
+    if (userId) {
+      // User is logged in - fetch fresh data from server
+      get("/api/whoami")
+        .then((userData) => {
+          if (userData._id) {
+            setWins(userData.wins || 0);
+            setLosses(userData.losses || 0);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load stats from server:", err);
+        });
+    } else {
+      // User not logged in - reset to 0
+      setWins(0);
+      setLosses(0);
+    }
+  }, [userId]);
 
   // Card component
   const Card = ({ card, isHighlighted }) => {
@@ -1858,22 +1922,26 @@ const Game = () => {
               const expectedCardsForDealer = numSelected > 0 ? ((cardsRemaining + 1) / (numSelected + 1)) - 1 : cardsRemaining;
               
               // Calculate tail end probability
-              // d = number of cards dealer has remaining to 8
-              const d = 8 - dealerCards.length;
+              // p = numSelected, d = cardsRemaining, x = 8 - dealerCards.length
+              // Formula: C(d-p, x+1) / C(d, x+1)
+              const p = numSelected;
+              const d = cardsRemaining;
+              const x = 8 - dealerCards.length;
               let tailEndProbability;
-              if (d <= 0) {
+              
+              // If p=0, formula not valid and tEP = 1
+              if (p === 0) {
                 tailEndProbability = 1.0;
-              } else {
-                // Tail probability = (1-p)^(d+1) + (1-p)^(d+2) + ...
-                // This is an infinite geometric series: sum = (1-p)^(d+1) / p
-                const oneMinusP = 1 - percentAsDecimal;
-                if (percentAsDecimal > 0) {
-                  tailEndProbability = Math.pow(oneMinusP, d + 1) / percentAsDecimal;
-                } else {
-                  // If p = 0, then (1-p) = 1, so sum diverges to infinity
-                  // But in practice, if nothing is selected, dealer will always get more than 8
-                  tailEndProbability = 1.0;
-                }
+              }
+              // If x+1 > d-p, formula not valid and tEP = 0
+              else if (x + 1 > d - p) {
+                tailEndProbability = 0.0;
+              }
+              // Otherwise, use formula: C(d-p, x+1) / C(d, x+1)
+              else {
+                const numerator = combination(d - p, x + 1);
+                const denominator = combination(d, x + 1);
+                tailEndProbability = denominator > 0 ? numerator / denominator : 0.0;
               }
               const tailEndProbabilityStr = tailEndProbability.toFixed(3);
               

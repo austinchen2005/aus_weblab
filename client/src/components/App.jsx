@@ -33,12 +33,21 @@ const App = () => {
     const userToken = credentialResponse.credential;
     const decodedCredential = jwt_decode(userToken);
     console.log(`Logged in as ${decodedCredential.name}`);
-    post("/api/login", { token: userToken }).then((userData) => {
-      console.log("User logged in:", userData);
-      setUserId(userData._id);
-      setUser(userData);
-      post("/api/initsocket", { socketid: socket.id });
-    });
+    post("/api/login", { token: userToken })
+      .then((userData) => {
+        console.log("User logged in:", userData);
+        setUserId(userData._id);
+        setUser(userData);
+        // Socket.IO is disabled in `client/src/client-socket.js` (dummy socket id: "disabled")
+        // Only attempt to init socket if a real socket id exists.
+        if (socket?.id && socket.id !== "disabled") {
+          post("/api/initsocket", { socketid: socket.id });
+        }
+      })
+      .catch((err) => {
+        console.error("Login failed:", err);
+        alert(`Login failed: ${err.message || err}. Check server console for details.`);
+      });
   };
 
   const handleLogout = () => {

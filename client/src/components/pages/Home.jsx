@@ -1,18 +1,34 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { UserContext } from "../App";
+import { get } from "../../utilities";
 import FallingSuits from "../FallingSuits";
 import "../../utilities.css";
 import "./Home.css";
 
 const Home = () => {
+  const { userId, user } = useContext(UserContext);
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
 
   useEffect(() => {
-    const savedWins = parseInt(localStorage.getItem('gameWins') || '0', 10);
-    const savedLosses = parseInt(localStorage.getItem('gameLosses') || '0', 10);
-    setWins(savedWins);
-    setLosses(savedLosses);
-  }, []);
+    if (userId) {
+      // User is logged in - fetch fresh data from server
+      get("/api/whoami")
+        .then((userData) => {
+          if (userData._id) {
+            setWins(userData.wins || 0);
+            setLosses(userData.losses || 0);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load stats from server:", err);
+        });
+    } else {
+      // User not logged in - reset to 0
+      setWins(0);
+      setLosses(0);
+    }
+  }, [userId]);
 
   // Calculate win rate and Bayesian score
   const totalGames = wins + losses;

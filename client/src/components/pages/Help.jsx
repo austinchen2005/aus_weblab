@@ -1,19 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
+import { UserContext } from "../App";
+import { post } from "../../utilities";
 import "../../utilities.css";
 import "./Help.css";
 
 const Help = () => {
+  const { userId } = useContext(UserContext);
   const [showRules, setShowRules] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleResetProfile = () => {
-    // Reset wins and losses in localStorage
-    localStorage.setItem('gameWins', '0');
-    localStorage.setItem('gameLosses', '0');
-    // Close the popup
-    setShowResetConfirm(false);
-    // Reload the page to update stats everywhere
-    window.location.reload();
+    if (userId) {
+      // Reset wins and losses on server
+      post("/api/updateStats", { wins: 0, losses: 0 })
+        .then(() => {
+          // Close the popup
+          setShowResetConfirm(false);
+          // Reload the page to update stats everywhere
+          window.location.reload();
+        })
+        .catch((err) => {
+          console.error("Failed to reset profile:", err);
+          alert("Failed to reset profile. Please try again.");
+        });
+    } else {
+      // User not logged in - can't reset (no stats to reset)
+      setShowResetConfirm(false);
+      alert("Please log in to reset your profile.");
+    }
   };
 
   const rulesText = `RULES:

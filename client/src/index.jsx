@@ -16,7 +16,6 @@ import {
   RouterProvider
 } from 'react-router-dom'
 
-// GoogleOAuthProvider disabled since login is not needed
 import { GoogleOAuthProvider } from '@react-oauth/google';
 const GOOGLE_CLIENT_ID = "1001640154904-l5u78j6sq3jp3mgohhf6uaa9qolk3rgu.apps.googleusercontent.com";
 
