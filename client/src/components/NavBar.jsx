@@ -39,6 +39,14 @@ const NavBar = () => {
         </li>
         <li>
           <Link 
+            to="/achievements" 
+            className={isActive("/achievements") ? "nav-button active" : "nav-button"}
+          >
+            Achievements
+          </Link>
+        </li>
+        <li>
+          <Link 
             to="/help" 
             className={isActive("/help") ? "nav-button active" : "nav-button"}
           >

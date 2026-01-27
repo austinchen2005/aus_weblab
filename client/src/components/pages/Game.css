@@ -494,3 +494,33 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Achievement popups */
+.achievement-popup-container {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 200;
+}
+
+.achievement-popup {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  min-width: 220px;
+}
+
+.achievement-popup-title {
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+  font-size: 0.9rem;
+}
+
+.achievement-popup-body {
+  font-size: 0.9rem;
+}

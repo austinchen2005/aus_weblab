@@ -18,6 +18,62 @@ const auth = require("./auth");
 // api endpoints: all these paths will be prefixed with "/api/"
 const router = express.Router();
 
+// Helper to recompute derived stats based on wins/losses
+function computeDerivedStats(user) {
+  const wins = user.wins || 0;
+  const losses = user.losses || 0;
+  const totalGames = wins + losses;
+  const alpha = 0;
+  const beta = 10;
+
+  const winRate = totalGames > 0 ? wins / totalGames : 0;
+  const bayesianScore =
+    wins + losses + alpha + beta > 0
+      ? (wins + alpha) / (wins + losses + alpha + beta)
+      : 0;
+
+  return { winRate, bayesianScore };
+}
+
+// Helper to compute which achievements should be unlocked based on stats
+// Returns an array of achievement IDs.
+function computeAchievementsFromStats({ wins = 0, losses = 0, bayesianScore = 0 }) {
+  const totalGames = wins + losses;
+  const result = [];
+
+  // Starting out: Play one game.
+  if (totalGames >= 1) {
+    result.push("starting_out");
+  }
+
+  // Rookie: Get bayes score > 0.1
+  if (bayesianScore > 0.1) {
+    result.push("rookie");
+  }
+
+  // Novice: Get bayes score > 0.2
+  if (bayesianScore > 0.2) {
+    result.push("novice");
+  }
+
+  // Proficient: Get bayes score > 0.3
+  if (bayesianScore > 0.3) {
+    result.push("proficient");
+  }
+
+  // Skilled: Get bayes score > 0.4
+  if (bayesianScore > 0.4) {
+    result.push("skilled");
+  }
+
+  // Master: Get bayes score > 0.5
+  if (bayesianScore > 0.5) {
+    result.push("master");
+  }
+
+  return result;
+}
+
 //initialize socket
 const socketManager = require("./server-socket");
 
@@ -47,14 +103,27 @@ router.post("/initsocket", (req, res) => {
 router.post("/updateStats", auth.ensureLoggedIn, (req, res) => {
   const { wins, losses } = req.body;
   
-  // Update user in database
+  // Compute new wins/losses
+  const newWins = wins !== undefined ? wins : req.user.wins;
+  const newLosses = losses !== undefined ? losses : req.user.losses;
+  const derived = computeDerivedStats({ wins: newWins, losses: newLosses });
+  const achievements = computeAchievementsFromStats({
+    wins: newWins,
+    losses: newLosses,
+    bayesianScore: derived.bayesianScore,
+  });
+
+  // Update user in database with derived stats
   User.findByIdAndUpdate(
     req.user._id,
-    { 
-      $set: { 
-        wins: wins !== undefined ? wins : req.user.wins,
-        losses: losses !== undefined ? losses : req.user.losses,
-      }
+    {
+      $set: {
+        wins: newWins,
+        losses: newLosses,
+        winRate: derived.winRate,
+        bayesianScore: derived.bayesianScore,
+        achievements,
+      },
     },
     { new: true } // Return updated document
   )
@@ -77,8 +146,19 @@ router.post("/incrementWin", auth.ensureLoggedIn, (req, res) => {
     { new: true }
   )
     .then((updatedUser) => {
-      req.session.user = updatedUser;
-      res.send(updatedUser);
+      const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
+      updatedUser.winRate = winRate;
+      updatedUser.bayesianScore = bayesianScore;
+      updatedUser.achievements = computeAchievementsFromStats({
+        wins: updatedUser.wins || 0,
+        losses: updatedUser.losses || 0,
+        bayesianScore,
+      });
+      return updatedUser.save();
+    })
+    .then((savedUser) => {
+      req.session.user = savedUser;
+      res.send(savedUser);
     })
     .catch((err) => {
       console.log(`Error incrementing win: ${err}`);
@@ -94,8 +174,19 @@ router.post("/incrementLoss", auth.ensureLoggedIn, (req, res) => {
     { new: true }
   )
     .then((updatedUser) => {
-      req.session.user = updatedUser;
-      res.send(updatedUser);
+      const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
+      updatedUser.winRate = winRate;
+      updatedUser.bayesianScore = bayesianScore;
+      updatedUser.achievements = computeAchievementsFromStats({
+        wins: updatedUser.wins || 0,
+        losses: updatedUser.losses || 0,
+        bayesianScore,
+      });
+      return updatedUser.save();
+    })
+    .then((savedUser) => {
+      req.session.user = savedUser;
+      res.send(savedUser);
     })
     .catch((err) => {
       console.log(`Error incrementing loss: ${err}`);
@@ -111,18 +202,97 @@ router.post("/updateUser", auth.ensureLoggedIn, (req, res) => {
   delete updates._id;
   delete updates.googleid;
   
-  User.findByIdAndUpdate(
-    req.user._id,
-    { $set: updates },
-    { new: true }
-  )
+  User.findByIdAndUpdate(req.user._id, { $set: updates }, { new: true })
     .then((updatedUser) => {
-      req.session.user = updatedUser;
-      res.send(updatedUser);
+      // If wins or losses were changed via updateUser, recompute derived stats
+      if (
+        Object.prototype.hasOwnProperty.call(updates, "wins") ||
+        Object.prototype.hasOwnProperty.call(updates, "losses")
+      ) {
+        const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
+        updatedUser.winRate = winRate;
+        updatedUser.bayesianScore = bayesianScore;
+        updatedUser.achievements = computeAchievementsFromStats({
+          wins: updatedUser.wins || 0,
+          losses: updatedUser.losses || 0,
+          bayesianScore,
+        });
+        return updatedUser.save();
+      }
+      return updatedUser;
+    })
+    .then((savedUser) => {
+      req.session.user = savedUser;
+      res.send(savedUser);
     })
     .catch((err) => {
       console.log(`Error updating user: ${err}`);
       res.status(500).send({ err: "Failed to update user" });
+    });
+});
+
+// Public leaderboard: return all users with stats, sorted by bayesianScore then wins
+router.get("/leaderboard", (req, res) => {
+  User.find({})
+    .then((users) => {
+      const enriched = users.map((user) => {
+        const obj = user.toObject();
+        // Ensure derived stats exist (for old documents)
+        const derived = computeDerivedStats(obj);
+        return {
+          _id: obj._id,
+          name: obj.name || "Anonymous",
+          wins: obj.wins || 0,
+          losses: obj.losses || 0,
+          winRate: obj.winRate != null ? obj.winRate : derived.winRate,
+          bayesianScore:
+            obj.bayesianScore != null ? obj.bayesianScore : derived.bayesianScore,
+        };
+      });
+
+      enriched.sort((a, b) => {
+        if (b.bayesianScore !== a.bayesianScore) {
+          return b.bayesianScore - a.bayesianScore;
+        }
+        // Tie-breaker: more wins first
+        return b.wins - a.wins;
+      });
+
+      res.send(enriched);
+    })
+    .catch((err) => {
+      console.log(`Error loading leaderboard: ${err}`);
+      res.status(500).send({ err: "Failed to load leaderboard" });
+    });
+});
+
+// Check if a username is available (not used by another user)
+router.post("/checkUsername", (req, res) => {
+  const { name } = req.body || {};
+  const trimmed = (name || "").trim();
+
+  if (!trimmed) {
+    return res.status(400).send({ err: "Username is required" });
+  }
+
+  User.findOne({ name: trimmed })
+    .then((existing) => {
+      if (!existing) {
+        // No user has this name; it's available
+        return res.send({ available: true });
+      }
+
+      // If the existing user is the same as the requester, treat as available
+      if (req.user && existing._id.toString() === req.user._id.toString()) {
+        return res.send({ available: true, isCurrentUser: true });
+      }
+
+      // Taken by a different user
+      return res.send({ available: false });
+    })
+    .catch((err) => {
+      console.log(`Error checking username: ${err}`);
+      res.status(500).send({ err: "Failed to check username" });
     });
 });
 

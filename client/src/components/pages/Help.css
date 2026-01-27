@@ -17,7 +17,7 @@
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.3s ease;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .rules-btn:hover {
@@ -26,6 +26,14 @@
 
 .rules-btn:active {
   transform: scale(0.98);
+}
+
+.bayes-btn {
+  background-color: #6366f1; /* indigo-ish to distinguish */
+}
+
+.bayes-btn:hover {
+  background-color: #4f46e5;
 }
 
 .rules-display {

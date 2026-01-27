@@ -27,6 +27,11 @@
   padding: 0;
 }
 
+/* Push auth section (last item) to the right edge */
+.nav-list li:last-child {
+  margin-left: auto;
+}
+
 .nav-button {
   background-color: transparent;
   border: none;
@@ -47,4 +52,32 @@
 .nav-button.active {
   background-color: #3498db;
   color: white;
+}
+
+/* Auth (logged-in) section on the right side of the navbar */
+.auth-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-username {
+  color: #ffffff;
+  font-family: 'Proza Libre', sans-serif; /* default site font */
+  font-size: 0.95rem;
+}
+
+.auth-info button {
+  background-color: transparent;
+  border: 1px solid #ecf0f1;
+  color: #ecf0f1;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Proza Libre', sans-serif;
+  font-size: 0.85rem;
+}
+
+.auth-info button:hover {
+  background-color: #34495e;
 }

@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { getSetting, setSetting, resetSettings, DEFAULT_SETTINGS, getAllSettings } from "../../utils/gameSettings";
+import { UserContext } from "../App";
+import { post } from "../../utilities";
 import "../../utilities.css";
 import "./Settings.css";
 
 const Settings = () => {
   const [settings, setSettingsState] = useState(getAllSettings());
+  const [usernameError, setUsernameError] = useState("");
+  const { userId, user, setUser } = useContext(UserContext);
 
   // Update settings when localStorage changes
   useEffect(() => {
@@ -49,6 +53,50 @@ const Settings = () => {
     const value = parseFloat(str);
     if (isNaN(value)) return 0.2;
     return Math.max(0.1, Math.min(2.0, value)) * 1000; // Convert to ms
+  };
+
+  const handleChangeUsername = () => {
+    if (!userId) {
+      alert("Please log in to change your username.");
+      return;
+    }
+
+    const currentName = user?.name || "";
+    const entered = window.prompt("Enter a new username:", currentName);
+    if (!entered) {
+      setUsernameError("");
+      return;
+    }
+
+    const newName = entered.trim();
+    if (!newName || newName === currentName) {
+      setUsernameError("");
+      return;
+    }
+
+    // First check if the username is already taken by another user
+    post("/api/checkUsername", { name: newName })
+      .then((result) => {
+        if (!result || result.available === false) {
+          setUsernameError("This username is taken. Please enter a different username.");
+          return null;
+        }
+
+        setUsernameError("");
+
+        // Optimistically update local context
+        setUser((prev) => (prev ? { ...prev, name: newName } : prev));
+
+        return post("/api/updateUser", { name: newName });
+      })
+      .then((updatedUser) => {
+        if (!updatedUser) return;
+        setUser(updatedUser);
+      })
+      .catch((err) => {
+        console.error("Failed to update username from settings:", err);
+        alert("Failed to update username. Please try again.");
+      });
   };
 
   return (
@@ -168,7 +216,11 @@ const Settings = () => {
           <button className="reset-btn" onClick={handleReset}>
             Reset to Default
           </button>
+          <button className="change-username-btn" onClick={handleChangeUsername}>
+            Change Username
+          </button>
         </div>
+        {usernameError && <p className="username-error">{usernameError}</p>}
       </div>
     </div>
   );

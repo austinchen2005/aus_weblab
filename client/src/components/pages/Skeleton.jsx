@@ -6,19 +6,24 @@ import "./Skeleton.css";
 import { UserContext } from "../App";
 
 const Skeleton = () => {
-  const { userId, handleLogin, handleLogout } = useContext(UserContext);
+  const { userId, user, handleLogin, handleLogout } = useContext(UserContext);
   console.log("Skeleton component rendered");
   return (
     <>
       {userId ? (
-        <button
-          onClick={() => {
-            googleLogout();
-            handleLogout();
-          }}
-        >
-          Logout
-        </button>
+        <div className="auth-info">
+          {user && user.name && (
+            <span className="auth-username">Logged in as {user.name}</span>
+          )}
+          <button
+            onClick={() => {
+              googleLogout();
+              handleLogout();
+            }}
+          >
+            Logout
+          </button>
+        </div>
       ) : (
         <GoogleLogin onSuccess={handleLogin} onError={(err) => console.log(err)} />
       )}

@@ -1,39 +1,20 @@
 import React, { useState, useEffect, useRef, startTransition, useContext } from "react";
-import { evaluateHand } from "../../utils/pokerEvaluator";
+import { evaluateHands, findBestHandFromCards } from "../../utils/pokerEvaluator";
 import { getSetting } from "../../utils/gameSettings";
 import { UserContext } from "../App";
 import { get, post } from "../../utilities";
+import { combination, playSound } from "../../utils/misc";
+import { ACHIEVEMENTS } from "../../constants/achievements";
 import "../../utilities.css";
 import "./Game.css";
+import Skeleton from "./Skeleton";
+import SelectionMatrix from "../SelectionMatrix";
 
 const suits = ['♥', '♦', '♣', '♠']; // Heart, Diamond, Club, Spade
 const suitsDisplay = ['♥', '♦', '♣', '♠'];
 const ranks = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
 
-// Compare two poker hands (returns 1 if hand1 > hand2, -1 if hand1 < hand2, 0 if equal)
-function compareHands(hand1Value, hand1Rank, hand2Value, hand2Rank) {
-  if (hand1Value > hand2Value) return 1;
-  if (hand1Value < hand2Value) return -1;
-  // If same hand value, compare ranks
-  if (hand1Rank > hand2Rank) return 1;
-  if (hand1Rank < hand2Rank) return -1;
-  return 0;
-}
-
-// Calculate combination (n choose k) = n! / (k! * (n-k)!)
-function combination(n, k) {
-  if (k > n || k < 0 || n < 0) return 0;
-  if (k === 0 || k === n) return 1;
-  if (k > n - k) k = n - k; // Use symmetry for efficiency
-  
-  let result = 1;
-  for (let i = 0; i < k; i++) {
-    result = result * (n - i) / (i + 1);
-  }
-  return result;
-}
-
-const Game = () => {
+const GameInner = () => {
   const { userId, user } = useContext(UserContext);
   const [deck, setDeck] = useState([]);
   const [playerCards, setPlayerCards] = useState([]);
@@ -43,6 +24,9 @@ const Game = () => {
   const [gameResult, setGameResult] = useState("");
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
+  const [winRate, setWinRate] = useState(0); // fraction from server
+  const [bayesianScore, setBayesianScore] = useState(0);
+  const [hasPendingLoss, setHasPendingLoss] = useState(false);
   const [selectedCards, setSelectedCards] = useState(new Set()); // Store as "rank-suit" strings
   const [gameStarted, setGameStarted] = useState(false);
   const [gameEnded, setGameEnded] = useState(false);
@@ -51,6 +35,7 @@ const Game = () => {
   const [newlyDealtCards, setNewlyDealtCards] = useState(new Set()); // Track newly dealt cards for highlight
   const [showDealerDrawMessage, setShowDealerDrawMessage] = useState(false);
   const [isDealerDrawing, setIsDealerDrawing] = useState(false);
+  const [achievementPopups, setAchievementPopups] = useState([]);
   
   // Track grayed-out cells (cards on the board)
   const [grayedOutCards, setGrayedOutCards] = useState(new Set()); // Set of "rank-suit" strings
@@ -76,62 +61,37 @@ const Game = () => {
     audioPoolRef.current = pool;
   }, []);
   
+  const dealSoundVolume = getSetting('dealSoundVolume');
+  const winSoundVolume = getSetting('winSoundVolume');
+  const loseSoundVolume = getSetting('loseSoundVolume');
+
   // Play card dealing sound using preloaded audio pool
   const playDealSound = () => {
-    try {
-      const pool = audioPoolRef.current;
-      if (pool.length === 0) {
-        // Fallback: create new audio if pool not ready
-        const audio = new Audio('/card-deal.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-        return;
-      }
-      
-      // Get next audio from pool (round-robin)
-      const audio = pool[audioPoolIndexRef.current];
-      audioPoolIndexRef.current = (audioPoolIndexRef.current + 1) % pool.length;
-      
-      // Reset to start and play
-      audio.currentTime = 0;
-      audio.play().catch(err => {
-        // Silently handle errors (browser autoplay policies, etc.)
-        // console.log('Could not play sound:', err);
-      });
-    } catch (err) {
-      // Silently handle errors
-      // console.log('Could not play sound:', err);
+    const pool = audioPoolRef.current;
+    if (pool.length === 0) {
+      // Fallback: create new audio if pool not ready
+      const audio = new Audio("/card-deal.mp3");
+      playSound(audio, dealSoundVolume);
+      return;
     }
+
+    // Get next audio from pool (round-robin)
+    const audio = pool[audioPoolIndexRef.current];
+    audioPoolIndexRef.current = (audioPoolIndexRef.current + 1) % pool.length;
+
+    playSound(audio, dealSoundVolume);
   };
 
   // Play win sound
   const playWinSound = () => {
-    try {
-      const audio = new Audio('/win-sound.wav');
-      audio.volume = 0.7;
-      audio.play().catch(err => {
-        // Silently handle errors (browser autoplay policies, etc.)
-        // console.log('Could not play win sound:', err);
-      });
-    } catch (err) {
-      // Silently handle errors
-      // console.log('Could not play win sound:', err);
-    }
+    const audio = new Audio("/win-sound.wav");
+    playSound(audio, winSoundVolume);
   };
 
   // Play lose sound
   const playLoseSound = () => {
-    try {
-      const audio = new Audio('/lose-sound.mp3');
-      audio.volume = 0.7;
-      audio.play().catch(err => {
-        // Silently handle errors (browser autoplay policies, etc.)
-        // console.log('Could not play lose sound:', err);
-      });
-    } catch (err) {
-      // Silently handle errors
-      // console.log('Could not play lose sound:', err);
-    }
+    const audio = new Audio("/lose-sound.mp3");
+    playSound(audio, loseSoundVolume);
   };
   
   // Refs to track current state in async callbacks
@@ -140,6 +100,7 @@ const Game = () => {
   const dealerCardsRef = useRef([]);
   const selectedCardsRef = useRef(new Set());
   const grayedOutCardsRef = useRef(new Set());
+  const achievementsRef = useRef(new Set());
   
   // Ref for throttling dealer hand evaluation
   const dealerHandEvaluationTimeoutRef = useRef(null);
@@ -231,14 +192,13 @@ const Game = () => {
       }
     };
   }, [dealerCards, isDealing, isDealerDrawing]);
-  const [selectedColumns, setSelectedColumns] = useState(new Set()); // Store selected rank columns
-  const [selectedRows, setSelectedRows] = useState(new Set()); // Store selected suit rows
-  const [dragStart, setDragStart] = useState(null); // {rank, suit} for drag selection start
-  const [dragEnd, setDragEnd] = useState(null); // {rank, suit} for drag selection end
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragTimer, setDragTimer] = useState(null); // Timer for drag delay
-  const [mouseDownPos, setMouseDownPos] = useState(null); // Initial mouse down position
-  const [dragMode, setDragMode] = useState(null); // 'select' or 'unselect' based on initial card state
+  // SelectionMatrix manages its own column/row header state and drag state;
+  // we only track the selected card keys here.
+
+  const handleSelectionChange = (newSelectedSet) => {
+    setSelectedCards(newSelectedSet);
+    selectedCardsRef.current = new Set(newSelectedSet);
+  };
 
   // Initialize deck
   const initializeDeck = () => {
@@ -303,13 +263,8 @@ const Game = () => {
     return shuffled;
   };
 
-  // Deal cards
-  const dealCards = (deck, count) => {
-    return deck.slice(0, count);
-  };
-
-  // Evaluate poker hand (using our browser-compatible evaluator)
-  const evaluatePokerHand = (cards) => {
+  // Legacy local poker evaluator (no longer used; kept for reference)
+  const legacyEvaluatePokerHand = (cards) => {
     if (cards.length !== 5) return null;
     try {
       return evaluateHand(cards);
@@ -320,7 +275,7 @@ const Game = () => {
   };
 
   // Evaluate hand from any number of cards (1-4 cards) - detects pairs, three of a kind, etc.
-  const evaluateHighCard = (cards) => {
+  const legacyEvaluateHighCard = (cards) => {
     if (cards.length === 0) return null;
     
     // Convert cards to values
@@ -387,23 +342,23 @@ const Game = () => {
   };
 
   // Find the best possible hand from any number of cards
-  const findBestHandFromCards = (cards) => {
+  const legacyFindBestHandFromCards = (cards) => {
     if (cards.length === 0) return null;
     if (cards.length < 5) {
       // For less than 5 cards, show high card
-      return evaluateHighCard(cards);
+      return legacyEvaluateHighCard(cards);
     }
     if (cards.length === 5) {
-      return evaluatePokerHand(cards);
+      return legacyEvaluatePokerHand(cards);
     }
     // For more than 5 cards, find the best 5-card combination
-    return findBestHand(cards);
+    return legacyFindBestHand(cards);
   };
 
   // Find the best 5-card hand from a larger set of cards (OPTIMIZED: checks best hands first, stops early)
-  const findBestHand = (cards) => {
+  const legacyFindBestHand = (cards) => {
     if (cards.length < 5) return null;
-    if (cards.length === 5) return evaluatePokerHand(cards);
+    if (cards.length === 5) return legacyEvaluatePokerHand(cards);
     
     // For small sets, do full search with early termination
     if (cards.length <= 10) {
@@ -416,7 +371,7 @@ const Game = () => {
         if (bestValue >= 10) return;
         
         if (combo.length === size) {
-          const handEval = evaluatePokerHand([...combo]);
+          const handEval = legacyEvaluatePokerHand([...combo]);
           if (handEval) {
             const comparison = compareHands(handEval.value, handEval.rank, bestValue, bestRank);
             if (comparison > 0) {
@@ -471,7 +426,7 @@ const Game = () => {
     
     // Helper: evaluate and update best if better
     const tryHand = (combo) => {
-      const handEval = evaluatePokerHand(combo);
+      const handEval = legacyEvaluatePokerHand(combo);
       if (handEval) {
         const comparison = compareHands(handEval.value, handEval.rank, bestValue, bestRank);
         if (comparison > 0) {
@@ -508,7 +463,7 @@ const Game = () => {
             }
             if (isStraight) {
               const combo = flushCards.slice(i, i + 5).map(c => c.original);
-              if (tryHand(combo) && bestValue >= 10) return bestHand; // Royal/straight flush found
+              if (tryHand(combo) && bestValue >= 10) return bestHand;
             }
           }
         }
@@ -702,395 +657,6 @@ const Game = () => {
     };
   };
 
-  // Check if a card is grayed out (for backward compatibility with existing code)
-  const isCardInBoard = (rank, suit) => {
-    return grayedOutCards.has(`${rank}-${suit}`);
-  };
-
-  // Toggle entire column selection
-  const toggleColumnSelection = (rank) => {
-    setSelectedColumns(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(rank)) {
-        // Unselect entire column
-        newSet.delete(rank);
-        setSelectedCards(prevCards => {
-          const newCardSet = new Set(prevCards);
-          suitsDisplay.forEach(suit => {
-            const cardKey = `${rank}-${suit}`;
-            newCardSet.delete(cardKey);
-          });
-          
-          // Update row selection state after unselecting column
-          setSelectedRows(prevRows => {
-            const newRowSet = new Set(prevRows);
-            suitsDisplay.forEach(suit => {
-              // Get all selectable (non-board) cards in this row
-              const selectableCards = ranks.filter(r => !isCardInBoard(r, suit));
-              
-              // If all cards in row are on board, don't mark row as selected
-              if (selectableCards.length === 0) {
-                newRowSet.delete(suit);
-              } else {
-                // Check if all selectable cards in this row are selected
-                const allRowSelected = selectableCards.every(r => {
-                  const key = `${r}-${suit}`;
-                  return newCardSet.has(key);
-                });
-                if (allRowSelected) {
-                  newRowSet.add(suit);
-                } else {
-                  newRowSet.delete(suit);
-                }
-              }
-            });
-            return newRowSet;
-          });
-          
-          return newCardSet;
-        });
-      } else {
-        // Select entire column
-        newSet.add(rank);
-        setSelectedCards(prevCards => {
-          const newCardSet = new Set(prevCards);
-          suitsDisplay.forEach(suit => {
-            const cardKey = `${rank}-${suit}`;
-            newCardSet.add(cardKey);
-          });
-          
-          // Update row selection state after selecting column
-          setSelectedRows(prevRows => {
-            const newRowSet = new Set(prevRows);
-            suitsDisplay.forEach(suit => {
-              // Get all selectable (non-board) cards in this row
-              const selectableCards = ranks.filter(r => !isCardInBoard(r, suit));
-              
-              // If all cards in row are on board, don't mark row as selected
-              if (selectableCards.length === 0) {
-                newRowSet.delete(suit);
-              } else {
-                // Check if all selectable cards in this row are selected
-                const allRowSelected = selectableCards.every(r => {
-                  const key = `${r}-${suit}`;
-                  return newCardSet.has(key);
-                });
-                if (allRowSelected) {
-                  newRowSet.add(suit);
-                } else {
-                  newRowSet.delete(suit);
-                }
-              }
-            });
-            return newRowSet;
-          });
-          
-          return newCardSet;
-        });
-      }
-      return newSet;
-    });
-  };
-
-  // Toggle entire row selection
-  const toggleRowSelection = (suit) => {
-    setSelectedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(suit)) {
-        // Unselect entire row (excluding board cards)
-        newSet.delete(suit);
-        setSelectedCards(prevCards => {
-          const newCardSet = new Set(prevCards);
-          ranks.forEach(rank => {
-            if (!isCardInBoard(rank, suit)) {
-              const cardKey = `${rank}-${suit}`;
-              newCardSet.delete(cardKey);
-            }
-          });
-          
-          // Update column selection state after unselecting row
-          updateColumnRowStates(newCardSet);
-          
-          return newCardSet;
-        });
-      } else {
-        // Select entire row (excluding board cards)
-        newSet.add(suit);
-        setSelectedCards(prevCards => {
-          const newCardSet = new Set(prevCards);
-          ranks.forEach(rank => {
-            if (!isCardInBoard(rank, suit)) {
-              const cardKey = `${rank}-${suit}`;
-              newCardSet.add(cardKey);
-            }
-          });
-          
-          // Update column selection state after selecting row
-          updateColumnRowStates(newCardSet);
-          
-          return newCardSet;
-        });
-      }
-      return newSet;
-    });
-  };
-
-  // Update column and row selection states based on selected cards
-  // Optionally accepts grayedOutCardsSet to use updated state (for when called during card dealing)
-  const updateColumnRowStates = (selectedCardsSet, grayedOutCardsSet = null) => {
-    // Use provided grayed-out set or fall back to current state
-    const currentGrayedOut = grayedOutCardsSet || grayedOutCards;
-    
-    // Helper function to check if a card is in board
-    const isCardInBoardCheck = (rank, suit) => {
-      return currentGrayedOut.has(`${rank}-${suit}`);
-    };
-    
-    // Update column states
-    setSelectedColumns(prevCols => {
-      const newColSet = new Set(prevCols);
-      ranks.forEach(rank => {
-        // Get all selectable (non-board) cards in this column
-        const selectableCards = suitsDisplay.filter(s => !isCardInBoardCheck(rank, s));
-        
-        // If all cards in column are on board, don't mark column as selected
-        if (selectableCards.length === 0) {
-          newColSet.delete(rank);
-        } else {
-          // Check if all selectable cards in this column are selected
-          const allColumnSelected = selectableCards.every(s => {
-            const key = `${rank}-${s}`;
-            return selectedCardsSet.has(key);
-          });
-          if (allColumnSelected) {
-            newColSet.add(rank);
-          } else {
-            newColSet.delete(rank);
-          }
-        }
-      });
-      return newColSet;
-    });
-    
-    // Update row states
-    setSelectedRows(prevRows => {
-      const newRowSet = new Set(prevRows);
-      suitsDisplay.forEach(suit => {
-        // Get all selectable (non-board) cards in this row
-        const selectableCards = ranks.filter(r => !isCardInBoardCheck(r, suit));
-        
-        // If all cards in row are on board, don't mark row as selected
-        if (selectableCards.length === 0) {
-          newRowSet.delete(suit);
-        } else {
-          // Check if all selectable cards in this row are selected
-          const allRowSelected = selectableCards.every(r => {
-            const key = `${r}-${suit}`;
-            return selectedCardsSet.has(key);
-          });
-          if (allRowSelected) {
-            newRowSet.add(suit);
-          } else {
-            newRowSet.delete(suit);
-          }
-        }
-      });
-      return newRowSet;
-    });
-  };
-
-  // Handle mouse down for drag selection
-  const handleMouseDown = (rank, suit, e) => {
-    // Only start drag on card cells, not on buttons
-    if (e.target.closest('button')) return;
-    
-    // Don't allow selection of board cards
-    if (isCardInBoard(rank, suit)) return;
-    
-    // Determine if we're starting on a selected or unselected card
-    const cardKey = `${rank}-${suit}`;
-    const isSelected = selectedCards.has(cardKey);
-    const mode = isSelected ? 'unselect' : 'select';
-    
-    // Store initial position
-    const initialPos = { rank, suit, x: e.clientX, y: e.clientY };
-    setMouseDownPos(initialPos);
-    setDragStart({ rank, suit });
-    setDragEnd({ rank, suit });
-    setDragMode(mode);
-    
-    // Start timer - if mouseUp doesn't happen within 100ms, enable dragging
-    const timer = setTimeout(() => {
-      setIsDragging(true);
-    }, 100);
-    
-    setDragTimer(timer);
-  };
-
-  // Handle mouse move for drag selection
-  const handleMouseMove = (rank, suit) => {
-    if (isDragging && dragStart) {
-      setDragEnd({ rank, suit });
-    }
-  };
-
-  // Handle mouse up to complete drag selection
-  const handleMouseUp = (e) => {
-    // Clear the drag timer if it exists (mouseUp happened before 100ms)
-    if (dragTimer) {
-      clearTimeout(dragTimer);
-      setDragTimer(null);
-    }
-    
-    // If we were dragging, process the drag selection
-    if (isDragging && dragStart && dragEnd) {
-      // Get all ranks and suits in the selection rectangle
-      const startRankIndex = ranks.indexOf(dragStart.rank);
-      const endRankIndex = ranks.indexOf(dragEnd.rank);
-      const startSuitIndex = suitsDisplay.indexOf(dragStart.suit);
-      const endSuitIndex = suitsDisplay.indexOf(dragEnd.suit);
-      
-      const minRankIndex = Math.min(startRankIndex, endRankIndex);
-      const maxRankIndex = Math.max(startRankIndex, endRankIndex);
-      const minSuitIndex = Math.min(startSuitIndex, endSuitIndex);
-      const maxSuitIndex = Math.max(startSuitIndex, endSuitIndex);
-      
-      // Select or unselect all cards in the rectangle (excluding board cards)
-      setSelectedCards(prev => {
-        const newSet = new Set(prev);
-        for (let r = minRankIndex; r <= maxRankIndex; r++) {
-          for (let s = minSuitIndex; s <= maxSuitIndex; s++) {
-            const rank = ranks[r];
-            const suit = suitsDisplay[s];
-            // Only process if not in board
-            if (!isCardInBoard(rank, suit)) {
-              const cardKey = `${rank}-${suit}`;
-              if (dragMode === 'select') {
-                newSet.add(cardKey);
-              } else if (dragMode === 'unselect') {
-                newSet.delete(cardKey);
-              }
-            }
-          }
-        }
-        
-        // Update column and row selection states
-        updateColumnRowStates(newSet);
-        
-        return newSet;
-      });
-    }
-    
-    // Reset drag state
-    setIsDragging(false);
-    setDragStart(null);
-    setDragEnd(null);
-    setDragMode(null);
-    
-    // Clear mouseDownPos after a small delay to allow onClick to process
-    const currentMouseDownPos = mouseDownPos;
-    setTimeout(() => {
-      setMouseDownPos(null);
-    }, 100);
-  };
-
-  // Check if a card is in the drag selection rectangle
-  const isInDragSelection = (rank, suit) => {
-    if (!dragStart || !dragEnd || !isDragging) return false;
-    
-    const rankIndex = ranks.indexOf(rank);
-    const suitIndex = suitsDisplay.indexOf(suit);
-    const startRankIndex = ranks.indexOf(dragStart.rank);
-    const endRankIndex = ranks.indexOf(dragEnd.rank);
-    const startSuitIndex = suitsDisplay.indexOf(dragStart.suit);
-    const endSuitIndex = suitsDisplay.indexOf(dragEnd.suit);
-    
-    const minRankIndex = Math.min(startRankIndex, endRankIndex);
-    const maxRankIndex = Math.max(startRankIndex, endRankIndex);
-    const minSuitIndex = Math.min(startSuitIndex, endSuitIndex);
-    const maxSuitIndex = Math.max(startSuitIndex, endSuitIndex);
-    
-    return rankIndex >= minRankIndex && rankIndex <= maxRankIndex &&
-           suitIndex >= minSuitIndex && suitIndex <= maxSuitIndex;
-  };
-
-  // Toggle card selection in rule popup
-  const toggleCardSelection = (rank, suit) => {
-    // Don't allow selection of board cards
-    if (isCardInBoard(rank, suit)) return;
-    
-    const cardKey = `${rank}-${suit}`;
-    setSelectedCards(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(cardKey)) {
-        newSet.delete(cardKey);
-      } else {
-        newSet.add(cardKey);
-      }
-      
-      // Update column and row selection states
-      updateColumnRowStates(newSet);
-      
-      return newSet;
-    });
-  };
-
-  // Toggle all cards selection
-  const toggleAllCards = () => {
-    if (isDealing) return;
-    
-    // Get all possible cards (excluding board cards)
-    const allSelectableCards = new Set();
-    ranks.forEach(rank => {
-      suitsDisplay.forEach(suit => {
-        if (!isCardInBoard(rank, suit)) {
-          allSelectableCards.add(`${rank}-${suit}`);
-        }
-      });
-    });
-    
-    // Check if all selectable cards are currently selected
-    const allSelected = allSelectableCards.size > 0 && 
-      Array.from(allSelectableCards).every(cardKey => selectedCards.has(cardKey));
-    
-    if (allSelected) {
-      // Deselect all cards
-      setSelectedCards(new Set());
-      setSelectedColumns(new Set());
-      setSelectedRows(new Set());
-    } else {
-      // Select all selectable cards
-      setSelectedCards(new Set(allSelectableCards));
-      
-      // Update column and row selections
-      const newColumns = new Set();
-      const newRows = new Set();
-      
-      ranks.forEach(rank => {
-        const allInColumnSelected = suitsDisplay.every(suit => {
-          const cardKey = `${rank}-${suit}`;
-          return isCardInBoard(rank, suit) || allSelectableCards.has(cardKey);
-        });
-        if (allInColumnSelected && suitsDisplay.some(suit => !isCardInBoard(rank, suit))) {
-          newColumns.add(rank);
-        }
-      });
-      
-      suitsDisplay.forEach(suit => {
-        const allInRowSelected = ranks.every(rank => {
-          const cardKey = `${rank}-${suit}`;
-          return isCardInBoard(rank, suit) || allSelectableCards.has(cardKey);
-        });
-        if (allInRowSelected && ranks.some(rank => !isCardInBoard(rank, suit))) {
-          newRows.add(suit);
-        }
-      });
-      
-      setSelectedColumns(newColumns);
-      setSelectedRows(newRows);
-    }
-  };
-
   // Start game
   const startGame = () => {
     // Clear any ongoing deal timeouts
@@ -1121,15 +687,28 @@ const Game = () => {
     dealerCardsRef.current = [];
     
     // Reset selection state
-    setSelectedCards(new Set());
-    setSelectedColumns(new Set());
-    setSelectedRows(new Set());
-    selectedCardsRef.current = new Set();
+    const emptySelection = new Set();
+    setSelectedCards(emptySelection);
+    selectedCardsRef.current = emptySelection;
     
     // Reset grayed-out state
-    setGrayedOutCards(new Set());
+    const emptyGrayed = new Set();
+    setGrayedOutCards(emptyGrayed);
     setGrayedOutRows(new Set());
     setGrayedOutColumns(new Set());
+    grayedOutCardsRef.current = emptyGrayed;
+
+    // Record a provisional loss in the background so refreshes mid-game count as a loss
+    if (userId && !hasPendingLoss) {
+      post("/api/incrementLoss")
+        .then(() => {
+          // Don't update visible stats yet; just remember there is a pending loss
+          setHasPendingLoss(true);
+        })
+        .catch((err) => {
+          console.error("Failed to create pending loss on game start:", err);
+        });
+    }
   };
 
   // Deal one card sequentially with delays
@@ -1154,18 +733,7 @@ const Game = () => {
         setNewlyDealtCards(new Set()); // Clear highlights
         setGameResult("You lose!");
         playLoseSound();
-        
-        // Update losses: send to server if logged in
-        if (userId) {
-          post("/api/incrementLoss")
-            .then((updatedUser) => {
-              setWins(updatedUser.wins || 0);
-              setLosses(updatedUser.losses || 0);
-            })
-            .catch((err) => {
-              console.error("Failed to update loss on server:", err);
-            });
-        }
+        // If we created a pending loss, it already counts; just sync stats if needed when game ends
         setGameEnded(true);
         return;
       }
@@ -1212,9 +780,6 @@ const Game = () => {
             newSet.delete(cardKey);
             // Update ref immediately
             selectedCardsRef.current = newSet;
-            // Update column and row selection states after removing card
-            // Pass the new grayed-out cards set so it uses the updated state
-            updateColumnRowStates(newSet, grayedState.newGrayedCards);
           }
           return newSet;
         });
@@ -1294,18 +859,7 @@ const Game = () => {
         setNewlyDealtCards(new Set()); // Clear highlights
         setGameResult("You lose!");
         playLoseSound();
-        
-        // Update losses: send to server if logged in
-        if (userId) {
-          post("/api/incrementLoss")
-            .then((updatedUser) => {
-              setWins(updatedUser.wins || 0);
-              setLosses(updatedUser.losses || 0);
-            })
-            .catch((err) => {
-              console.error("Failed to update loss on server:", err);
-            });
-        }
+        // If we created a pending loss, it already counts; just sync stats if needed when game ends
         setGameEnded(true);
         return;
       }
@@ -1352,9 +906,6 @@ const Game = () => {
             newSet.delete(cardKey);
             // Update ref immediately
             selectedCardsRef.current = newSet;
-            // Update column and row selection states after removing card
-            // Pass the new grayed-out cards set so it uses the updated state
-            updateColumnRowStates(newSet, grayedState.newGrayedCards);
           }
           return newSet;
         });
@@ -1519,9 +1070,6 @@ const Game = () => {
             newSet.delete(cardKey);
             // Update ref immediately
             selectedCardsRef.current = newSet;
-            // Update column and row selection states after removing card
-            // Pass the new grayed-out cards set so it uses the updated state
-            updateColumnRowStates(newSet, grayedState.newGrayedCards);
           }
           return newSet;
         });
@@ -1556,20 +1104,14 @@ const Game = () => {
 
   // Evaluate game after player gets 5 cards
   const evaluateGame = (finalPlayerCards, finalDealerCards) => {
-    const playerHandEval = evaluatePokerHand(finalPlayerCards);
-    const dealerHandEval = findBestHand(finalDealerCards);
-    
+    const { playerHand: playerHandEval, dealerHand: dealerHandEval, comparison } =
+      evaluateHands(finalPlayerCards, finalDealerCards);
+
     setPlayerHand(playerHandEval);
     setDealerHand(dealerHandEval);
     
     // Determine winner
     if (playerHandEval && dealerHandEval) {
-      const comparison = compareHands(
-        playerHandEval.value,
-        playerHandEval.rank,
-        dealerHandEval.value,
-        dealerHandEval.rank
-      );
       
       if (comparison > 0) {
         setGameResult("You win!");
@@ -1577,14 +1119,33 @@ const Game = () => {
         
         // Update wins: send to server if logged in
         if (userId) {
-          post("/api/incrementWin")
-            .then((updatedUser) => {
-              setWins(updatedUser.wins || 0);
-              setLosses(updatedUser.losses || 0);
-            })
-            .catch((err) => {
-              console.error("Failed to update win on server:", err);
-            });
+          // If we created a pending loss at game start, cancel that loss and add a win instead
+          if (hasPendingLoss) {
+            post("/api/updateStats", { wins: wins + 1, losses })
+              .then((updatedUser) => {
+                setWins(updatedUser.wins || 0);
+                setLosses(updatedUser.losses || 0);
+                setWinRate(updatedUser.winRate || 0);
+                setBayesianScore(updatedUser.bayesianScore || 0);
+                setHasPendingLoss(false);
+                handleAchievementsFromUser(updatedUser);
+              })
+              .catch((err) => {
+                console.error("Failed to convert pending loss to win on server:", err);
+              });
+          } else {
+            post("/api/incrementWin")
+              .then((updatedUser) => {
+                setWins(updatedUser.wins || 0);
+                setLosses(updatedUser.losses || 0);
+                setWinRate(updatedUser.winRate || 0);
+                setBayesianScore(updatedUser.bayesianScore || 0);
+                handleAchievementsFromUser(updatedUser);
+              })
+              .catch((err) => {
+                console.error("Failed to update win on server:", err);
+              });
+          }
         }
       } else if (comparison < 0) {
         setGameResult("You lose!");
@@ -1592,14 +1153,35 @@ const Game = () => {
         
         // Update losses: send to server if logged in
         if (userId) {
-          post("/api/incrementLoss")
-            .then((updatedUser) => {
-              setWins(updatedUser.wins || 0);
-              setLosses(updatedUser.losses || 0);
-            })
-            .catch((err) => {
-              console.error("Failed to update loss on server:", err);
-            });
+          if (hasPendingLoss) {
+            // Pending loss already recorded; just sync visible stats from server
+            get("/api/whoami")
+              .then((userData) => {
+                if (userData._id) {
+                  setWins(userData.wins || 0);
+                  setLosses(userData.losses || 0);
+                  setWinRate(userData.winRate || 0);
+                  setBayesianScore(userData.bayesianScore || 0);
+                  handleAchievementsFromUser(userData);
+                }
+                setHasPendingLoss(false);
+              })
+              .catch((err) => {
+                console.error("Failed to sync loss stats from server:", err);
+              });
+          } else {
+            post("/api/incrementLoss")
+              .then((updatedUser) => {
+                setWins(updatedUser.wins || 0);
+                setLosses(updatedUser.losses || 0);
+                setWinRate(updatedUser.winRate || 0);
+                setBayesianScore(updatedUser.bayesianScore || 0);
+                handleAchievementsFromUser(updatedUser);
+              })
+              .catch((err) => {
+                console.error("Failed to update loss on server:", err);
+              });
+          }
         }
       } else {
         // Ties are losses
@@ -1608,14 +1190,35 @@ const Game = () => {
         
         // Update losses: send to server if logged in
         if (userId) {
-          post("/api/incrementLoss")
-            .then((updatedUser) => {
-              setWins(updatedUser.wins || 0);
-              setLosses(updatedUser.losses || 0);
-            })
-            .catch((err) => {
-              console.error("Failed to update loss on server:", err);
-            });
+          if (hasPendingLoss) {
+            // Pending loss already recorded; just sync visible stats from server
+            get("/api/whoami")
+              .then((userData) => {
+                if (userData._id) {
+                  setWins(userData.wins || 0);
+                  setLosses(userData.losses || 0);
+                  setWinRate(userData.winRate || 0);
+                  setBayesianScore(userData.bayesianScore || 0);
+                  handleAchievementsFromUser(userData);
+                }
+                setHasPendingLoss(false);
+              })
+              .catch((err) => {
+                console.error("Failed to sync loss stats from server:", err);
+              });
+          } else {
+            post("/api/incrementLoss")
+              .then((updatedUser) => {
+                setWins(updatedUser.wins || 0);
+                setLosses(updatedUser.losses || 0);
+                setWinRate(updatedUser.winRate || 0);
+                setBayesianScore(updatedUser.bayesianScore || 0);
+                handleAchievementsFromUser(updatedUser);
+              })
+              .catch((err) => {
+                console.error("Failed to update loss on server:", err);
+              });
+          }
         }
       }
     }
@@ -1633,6 +1236,9 @@ const Game = () => {
           if (userData._id) {
             setWins(userData.wins || 0);
             setLosses(userData.losses || 0);
+            setWinRate(userData.winRate || 0);
+            setBayesianScore(userData.bayesianScore || 0);
+            achievementsRef.current = new Set(userData.achievements || []);
           }
         })
         .catch((err) => {
@@ -1642,8 +1248,36 @@ const Game = () => {
       // User not logged in - reset to 0
       setWins(0);
       setLosses(0);
+      setWinRate(0);
+      setBayesianScore(0);
+      achievementsRef.current = new Set();
     }
   }, [userId]);
+
+  // Helper to handle newly unlocked achievements from a user object
+  const handleAchievementsFromUser = (userData) => {
+    const currentIds = Array.isArray(userData.achievements) ? userData.achievements : [];
+    const prevSet = achievementsRef.current || new Set();
+    const newSet = new Set(currentIds);
+
+    const newlyUnlocked = currentIds.filter((id) => !prevSet.has(id));
+    achievementsRef.current = newSet;
+
+    if (newlyUnlocked.length === 0) return;
+
+    const popupDuration = getSetting('achievementPopupDuration');
+
+    newlyUnlocked.forEach((id) => {
+      const meta = ACHIEVEMENTS.find((a) => a.id === id);
+      if (!meta) return;
+
+      setAchievementPopups((prev) => [...prev, { id, title: meta.title }]);
+
+      setTimeout(() => {
+        setAchievementPopups((prev) => prev.filter((p) => p.id !== id));
+      }, popupDuration);
+    });
+  };
 
   // Card component
   const Card = ({ card, isHighlighted }) => {
@@ -1656,15 +1290,22 @@ const Game = () => {
     );
   };
 
-  // Calculate win rate and Bayesian score
-  const totalGames = wins + losses;
-  const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : '0.0';
-  const alpha = 0;
-  const beta = 10;
-  const bayesianScore = ((wins + alpha) / (wins + losses + alpha + beta)).toFixed(3);
+  // Use server-side winRate and bayesianScore
+  const winRatePercent = (winRate * 100).toFixed(1);
+  const bayesianScoreDisplay = bayesianScore.toFixed(3);
 
   return (
     <div className="game-container">
+      {achievementPopups.length > 0 && (
+        <div className="achievement-popup-container">
+          {achievementPopups.map((popup) => (
+            <div key={popup.id} className="achievement-popup">
+              <div className="achievement-popup-title">Achievement unlocked!</div>
+              <div className="achievement-popup-body">{popup.title}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <h1>Poker Game</h1>
       
       <div className="stats-display">
@@ -1678,11 +1319,11 @@ const Game = () => {
         </div>
         <div className="stat-item">
           <span className="stat-label">Win Rate:</span>
-          <span className="stat-value">{winRate}%</span>
+          <span className="stat-value">{winRatePercent}%</span>
         </div>
         <div className="stat-item">
           <span className="stat-label">Bayesian Score:</span>
-          <span className="stat-value">{bayesianScore}</span>
+          <span className="stat-value">{bayesianScoreDisplay}</span>
         </div>
       </div>
 
@@ -1786,125 +1427,14 @@ const Game = () => {
       {/* Rule Selection Matrix */}
       {gameStarted && (
         <div className={`rule-matrix-container ${isDealing ? 'dealing-phase' : ''}`}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
-            <h2>Select Cards to Include</h2>
-          </div>
-          <div 
-            className={`card-matrix ${isDealing ? 'disabled' : ''}`}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={(e) => {
-              // If mouse leaves while dragging, complete the drag
-              if (isDragging) {
-                handleMouseUp(e);
-              } else {
-                // Just clear the timer if we weren't dragging yet
-                if (dragTimer) {
-                  clearTimeout(dragTimer);
-                  setDragTimer(null);
-                }
-                setIsDragging(false);
-                setDragStart(null);
-                setDragEnd(null);
-                setMouseDownPos(null);
-              }
-            }}
-          >
-            <div className="matrix-header">
-              <div className="matrix-cell header-cell">
-                <button 
-                  className="all-toggle-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isDealing) {
-                      toggleAllCards();
-                    }
-                  }}
-                  disabled={isDealing}
-                >
-                  all
-                </button>
-              </div>
-              {ranks.map(rank => {
-                const isColumnSelected = selectedColumns.has(rank);
-                // Check if all cards in this column are grayed out
-                const allInBoard = grayedOutColumns.has(rank);
-                return (
-                  <div key={rank} className={`matrix-cell header-cell ${isColumnSelected ? 'column-selected' : ''} ${allInBoard ? 'board-column' : ''}`}>
-                    <button 
-                      className="column-toggle-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!allInBoard && !isDealing) {
-                          toggleColumnSelection(rank);
-                        }
-                      }}
-                      disabled={allInBoard || isDealing}
-                    >
-                      {rank}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            {suitsDisplay.map(suit => {
-              const isRowSelected = selectedRows.has(suit);
-              return (
-                <div key={suit} className="matrix-row">
-                  <div className={`matrix-cell header-cell ${isRowSelected ? 'row-selected' : ''}`}>
-                    <button 
-                      className="row-toggle-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Check if all cards in this row are grayed out
-                        const allInBoard = grayedOutRows.has(suit);
-                        if (!allInBoard && !isDealing) {
-                          toggleRowSelection(suit);
-                        }
-                      }}
-                      disabled={grayedOutRows.has(suit) || isDealing}
-                    >
-                      {suit}
-                    </button>
-                  </div>
-                  {ranks.map(rank => {
-                    const cardKey = `${rank}-${suit}`;
-                    const isSelected = selectedCards.has(cardKey);
-                    const isInDrag = isInDragSelection(rank, suit);
-                    const isInBoard = grayedOutCards.has(cardKey);
-                    const isRed = suit === '♥' || suit === '♦';
-                    // Determine drag visual state: if unselecting, show different style
-                    const dragClass = isInDrag ? (dragMode === 'unselect' ? 'drag-unselected' : 'drag-selected') : '';
-                    return (
-                        <div
-                          key={cardKey}
-                          className={`matrix-cell card-cell ${isSelected ? 'selected' : ''} ${dragClass} ${isInBoard ? 'board-card' : ''}`}
-                          onMouseDown={(e) => !isInBoard && !isDealing && handleMouseDown(rank, suit, e)}
-                          onMouseMove={() => {
-                            if (isDragging && !isInBoard && !isDealing) {
-                              handleMouseMove(rank, suit);
-                            }
-                          }}
-                          onClick={(e) => {
-                            // Don't allow clicks on board cards or during dealing
-                            if (isInBoard || isDealing) return;
-                            // Only toggle if we weren't dragging (i.e., mouseUp happened before 100ms)
-                            // and this is the same card we started the mouseDown on
-                            if (!isDragging && mouseDownPos && 
-                                mouseDownPos.rank === rank && mouseDownPos.suit === suit) {
-                              toggleCardSelection(rank, suit);
-                            }
-                          }}
-                        >
-                        <div className={`matrix-card-rank ${isRed ? 'red' : ''} ${isInBoard ? 'grayed-out' : ''}`}>{rank}</div>
-                        <div className={`matrix-card-suit ${isRed ? 'red' : ''} ${isInBoard ? 'grayed-out' : ''}`}>{suit}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-          
+          <SelectionMatrix
+            selectedCards={selectedCards}
+            onSelectionChange={handleSelectionChange}
+            grayedOutCards={grayedOutCards}
+            grayedOutRows={grayedOutRows}
+            grayedOutColumns={grayedOutColumns}
+            isDealing={isDealing}
+          />
           {/* Statistics below matrix */}
           <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px', fontSize: '0.95rem' }}>
             {(() => {
@@ -1961,6 +1491,23 @@ const Game = () => {
       )}
     </div>
   );
+};
+
+// Wrapper component to gate the game behind login without breaking hooks
+const Game = () => {
+  const { userId } = useContext(UserContext);
+
+  if (!userId) {
+    return (
+      <div className="game-container">
+        <h1>Poker Game</h1>
+        <p>Please login first.</p>
+        <Skeleton />
+      </div>
+    );
+  }
+
+  return <GameInner />;
 };
 
 export default Game;

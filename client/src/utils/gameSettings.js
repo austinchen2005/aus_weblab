@@ -3,7 +3,13 @@ export const DEFAULT_SETTINGS = {
   initialDealDelay: 200, // 0.2s in milliseconds
   repeatDealDelay: 700, // 0.7s in milliseconds
   dealerDrawDelay: 500, // 0.5s in milliseconds
-  cardPopScale: 1.15 // Scale for card popping effect
+  cardPopScale: 1.15, // Scale for card popping effect
+  // Sound volumes (0–1). These are NOT exposed on the settings page.
+  dealSoundVolume: 0.5,
+  winSoundVolume: 0.7,
+  loseSoundVolume: 0.7,
+  // Achievement popup duration in ms (not exposed in settings UI)
+  achievementPopupDuration: 5000,
 };
 
 // Get setting from localStorage or return default
@@ -14,6 +20,11 @@ export const getSetting = (key) => {
     // Validate range
     if (key === 'cardPopScale') {
       return Math.max(1.0, Math.min(2.0, value));
+    } else if (key === 'dealSoundVolume' || key === 'winSoundVolume' || key === 'loseSoundVolume') {
+      return Math.max(0, Math.min(1, value));
+    } else if (key === 'achievementPopupDuration') {
+      // Allow 1–10 seconds in ms
+      return Math.max(1000, Math.min(10000, value));
     } else {
       return Math.max(100, Math.min(2000, value)); // 0.1s to 2s in ms
     }
@@ -39,6 +50,7 @@ export const getAllSettings = () => {
     initialDealDelay: getSetting('initialDealDelay'),
     repeatDealDelay: getSetting('repeatDealDelay'),
     dealerDrawDelay: getSetting('dealerDrawDelay'),
-    cardPopScale: getSetting('cardPopScale')
+    cardPopScale: getSetting('cardPopScale'),
+    // Note: sound volumes are intentionally not exposed in the Settings UI
   };
 };

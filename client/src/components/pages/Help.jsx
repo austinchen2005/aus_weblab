@@ -7,6 +7,7 @@ import "./Help.css";
 const Help = () => {
   const { userId } = useContext(UserContext);
   const [showRules, setShowRules] = useState(false);
+  const [showBayes, setShowBayes] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleResetProfile = () => {
@@ -30,7 +31,7 @@ const Help = () => {
     }
   };
 
-  const rulesText = `RULES:
+  const rulesText1 = `RULES:
 This is a single player poker-like game!
 The player will have 5 cards at the end of the game.
 The dealer will have minimum 8 cards at the end of the game, but maybe more (can have unlimited amount).
@@ -41,6 +42,14 @@ So, you will click deal exactly five times and get to select 5 different rules.
 In the selection matrix, you can click columns or rows to select an entire column or row. You can also click "all" to select all squares. You can also drag a box in order to select & deselect a box.
 
 You win if your 5-card poker hand strictly beats the dealer's best 5-card poker hand formed from all of their cards. This must be strict - a royal flush vs a royal flush gives the dealer the win. Good luck!`;
+
+  const rulesText2 = `In order to rank people fairly based not just on winrate but also number of games played, we use Bayesian Score.
+
+It is calculated as follows:
+Bayesian Score = (wins + alpha) / (wins + losses + alpha + beta)
+where alpha and beta are hyperparameters that control the prior distribution.
+
+Currently, alpha = 0 and beta = 10.`;
 
   return (
     <div className="page-container help-page">
@@ -56,7 +65,20 @@ You win if your 5-card poker hand strictly beats the dealer's best 5-card poker 
 
         {showRules && (
           <div className="rules-display">
-            <pre className="rules-text">{rulesText}</pre>
+            <pre className="rules-text">{rulesText1}</pre>
+          </div>
+        )}
+
+        <button 
+          className="rules-btn bayes-btn"
+          onClick={() => setShowBayes(!showBayes)}
+        >
+          {showBayes ? 'Hide Bayesian Score' : 'Bayesian Score'}
+        </button>
+
+        {showBayes && (
+          <div className="rules-display">
+            <pre className="rules-text">{rulesText2}</pre>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import Game from "./components/pages/Game";
 import Leaderboard from "./components/pages/Leaderboard";
 import Settings from "./components/pages/Settings";
 import Help from "./components/pages/Help";
+import Achievements from "./components/pages/Achievements";
 import Skeleton from "./components/pages/Skeleton";
 import NotFound from "./components/pages/NotFound";
 
@@ -25,6 +26,7 @@ const router = createBrowserRouter(
       <Route path="/" element={<Home />}/>
       <Route path="/play" element={<Game />}/>
       <Route path="/leaderboard" element={<Leaderboard />}/>
+      <Route path="/achievements" element={<Achievements />}/>
       <Route path="/help" element={<Help />}/>
       <Route path="/settings" element={<Settings />}/>
       <Route path="/skeleton" element={<Skeleton />}/>

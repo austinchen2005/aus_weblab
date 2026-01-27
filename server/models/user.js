@@ -5,12 +5,11 @@ const UserSchema = new mongoose.Schema({
   googleid: String,
   wins: { type: Number, default: 0 },
   losses: { type: Number, default: 0 },
-  // Add any other user-specific fields here
-  // Examples:
-  // settings: { type: Object, default: {} },
-  // achievements: [String],
-  // lastPlayed: Date,
-  // totalGames: { type: Number, default: 0 },
+  // Derived stats (stored for convenience)
+  winRate: { type: Number, default: 0 },        // wins / (wins + losses)
+  bayesianScore: { type: Number, default: 0 },  // (wins + alpha) / (wins + losses + alpha + beta)
+  // One-time achievements (store achievement IDs the user has unlocked)
+  achievements: { type: [String], default: [] },
 });
 
 // compile model from schema
