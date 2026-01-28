@@ -89,7 +89,7 @@
 
 .stat-value {
   font-weight: bold;
-  color: var(--blue);
+  color: var(--primary);
   font-size: 1.2rem;
 }
 
@@ -101,7 +101,7 @@
 }
 
 .start-btn {
-  background-color: var(--blue);
+  background-color: var(--primary);
   color: white;
   border: none;
   padding: 1rem 2rem;

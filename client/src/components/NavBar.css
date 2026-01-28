@@ -50,7 +50,7 @@
 }
 
 .nav-button.active {
-  background-color: var(--blue);
+  background-color: var(--primary);
   color: white;
 }
 

@@ -2,11 +2,13 @@ import React, { useEffect, useState, useRef } from "react";
 import "./FallingSuits.css";
 
 const suits = ['♠', '♥', '♦', '♣'];
+// Use four distinct colors from the new blue palette
+const paletteColors = ['#0466C8', '#023E7D', '#002855', '#979DAC'];
 const suitColors = {
-  '♠': '#2c3e50', // black
-  '♣': '#2c3e50', // black
-  '♥': '#e74c3c', // red
-  '♦': '#e74c3c'  // red
+  '♠': paletteColors[0],
+  '♥': paletteColors[1],
+  '♦': paletteColors[2],
+  '♣': paletteColors[3],
 };
 
 const FallingSuits = () => {

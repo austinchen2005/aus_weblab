@@ -8,9 +8,9 @@
 }
 
 .rules-btn {
-  background-color: var(--blue);
-  color: white;
-  border: none;
+  background-color: transparent;
+  color: #ffffff;
+  border: 3px solid var(--primary);
   display: block;
   padding: 1rem 2rem;
   font-size: 1.2rem;
@@ -22,7 +22,7 @@
 }
 
 .rules-btn:hover {
-  background-color: rgba(12, 142, 244, 0.85);
+  background-color: rgba(4, 102, 200, 0.15);
 }
 
 .rules-btn:active {
@@ -30,17 +30,18 @@
 }
 
 .bayes-btn {
-  background-color: var(--blue);
+  background-color: transparent;
+  border-width: 3px;
 }
 
 .bayes-btn:hover {
-  background-color: rgba(12, 142, 244, 0.85);
+  background-color: rgba(4, 102, 200, 0.15);
 }
 
 .rules-display {
   background-color: var(--surface);
   border: 2px solid var(--border);
-  border-left: 10px solid var(--blue);
+  border-left: 10px solid var(--primary);
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -68,9 +69,9 @@
 }
 
 .reset-profile-btn {
-  background-color: var(--pink);
-  color: white;
-  border: none;
+  background-color: transparent;
+  color: var(--pink);
+  border: 3px solid var(--pink);
   padding: 1rem 2rem;
   font-size: 1.2rem;
   font-weight: 600;

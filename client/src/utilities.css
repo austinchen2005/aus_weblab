@@ -19,25 +19,32 @@
 @import url('https://fonts.googleapis.com/css2?family=Proza+Libre:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Brand palette: Royal gemstone dusk */
-  --pink: #D3045D;
-  --blue: #0C8EF4;
-  --beige: #D1BBAD;
-  --ink: #2B384C;
-  --purple: #A162A1;
-  --navy: #0C287B;
+  /* Brand palette: Blue spectrum */
+  --blue-1: #0466C8;
+  --blue-2: #0353A4;
+  --blue-3: #023E7D;
+  --blue-4: #002855;
+  --blue-5: #001845;
+  --blue-6: #001233;
+  --blue-7: #33415C;
+  --blue-8: #5C677D;
+  --blue-9: #7D8597;
+  --blue-10: #979DAC;
 
-  /* App semantic colors */
-  --app-bg: var(--beige); /* non-home pages background */
+  /* Semantic aliases */
+  --primary: var(--blue-1);
+  --primary-dark: var(--blue-3);
+  --primary-deep: var(--blue-4);
+  --navy: var(--blue-6);
   --surface: #ffffff;
   --surface-2: #f7f7f7;
-  --border: rgba(43, 56, 76, 0.18);
-  --text: var(--ink);
-  --muted: rgba(43, 56, 76, 0.7);
+  --border: rgba(51, 65, 92, 0.25);
+  --text: var(--blue-7);
+  --muted: rgba(92, 103, 125, 0.9);
+  --app-bg: var(--blue-10); /* non-home pages background */
 
   /* Legacy utility vars (kept for compatibility) */
-  --primary: var(--blue);
-  --primary--dim: rgba(12, 142, 244, 0.8);
+  --primary--dim: rgba(4, 102, 200, 0.8);
   --darkgrey: #d4d4d4;
   --medgrey: #e0e0e0;
   --grey: #f7f7f7;
@@ -57,6 +64,10 @@ html, body {
   height: 100%;
   overflow-x: hidden;
   box-sizing: border-box;
+}
+
+.page-container h1 {
+  color: var(--primary-deep);
 }
 
 *, *::before, *::after {
