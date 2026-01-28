@@ -18,6 +18,30 @@ const auth = require("./auth");
 // api endpoints: all these paths will be prefixed with "/api/"
 const router = express.Router();
 
+// All known achievement IDs (must stay in sync with client/constants/achievements.js)
+const ALL_ACHIEVEMENT_IDS = [
+  "starting_out",
+  "rookie",
+  "novice",
+  "proficient",
+  "skilled",
+  "master",
+  "legend",
+  "royalty",
+  "ruler_flush",
+  "leg_day",
+  "filled_home",
+  "flush_toilet",
+  "straightforward",
+  "ouch",
+  "twos_better_than_one",
+  "got_a_pair",
+  "no_hand_needed",
+  "i_am_all",
+];
+
+const META_ACHIEVEMENT_ID = "i_am_all";
+
 // Helper to recompute derived stats based on wins/losses
 function computeDerivedStats(user) {
   const wins = user.wins || 0;
@@ -36,7 +60,7 @@ function computeDerivedStats(user) {
 }
 
 // Helper to compute which achievements should be unlocked based on stats
-// Returns an array of achievement IDs.
+// Returns an array of *stat-based* achievement IDs.
 function computeAchievementsFromStats({ wins = 0, losses = 0, bayesianScore = 0 }) {
   const totalGames = wins + losses;
   const result = [];
@@ -74,6 +98,26 @@ function computeAchievementsFromStats({ wins = 0, losses = 0, bayesianScore = 0 
   return result;
 }
 
+// Merge existing achievements with new ones, and award meta "i_am_all" if all others are present.
+function mergeAchievements(existing, toAdd) {
+  const set = new Set(existing || []);
+
+  (toAdd || []).forEach((id) => {
+    if (ALL_ACHIEVEMENT_IDS.includes(id)) {
+      set.add(id);
+    }
+  });
+
+  // If user has all achievements except the meta one, grant "i_am_all"
+  const allButMeta = ALL_ACHIEVEMENT_IDS.filter((id) => id !== META_ACHIEVEMENT_ID);
+  const hasAllButMeta = allButMeta.every((id) => set.has(id));
+  if (hasAllButMeta) {
+    set.add(META_ACHIEVEMENT_ID);
+  }
+
+  return Array.from(set);
+}
+
 //initialize socket
 const socketManager = require("./server-socket");
 
@@ -107,7 +151,7 @@ router.post("/updateStats", auth.ensureLoggedIn, (req, res) => {
   const newWins = wins !== undefined ? wins : req.user.wins;
   const newLosses = losses !== undefined ? losses : req.user.losses;
   const derived = computeDerivedStats({ wins: newWins, losses: newLosses });
-  const achievements = computeAchievementsFromStats({
+  const statAchievements = computeAchievementsFromStats({
     wins: newWins,
     losses: newLosses,
     bayesianScore: derived.bayesianScore,
@@ -122,15 +166,21 @@ router.post("/updateStats", auth.ensureLoggedIn, (req, res) => {
         losses: newLosses,
         winRate: derived.winRate,
         bayesianScore: derived.bayesianScore,
-        achievements,
       },
     },
     { new: true } // Return updated document
   )
     .then((updatedUser) => {
+      updatedUser.achievements = mergeAchievements(
+        updatedUser.achievements,
+        statAchievements
+      );
+      return updatedUser.save();
+    })
+    .then((savedUser) => {
       // Update session with new user data
-      req.session.user = updatedUser;
-      res.send(updatedUser);
+      req.session.user = savedUser;
+      res.send(savedUser);
     })
     .catch((err) => {
       console.log(`Error updating stats: ${err}`);
@@ -149,11 +199,14 @@ router.post("/incrementWin", auth.ensureLoggedIn, (req, res) => {
       const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
       updatedUser.winRate = winRate;
       updatedUser.bayesianScore = bayesianScore;
-      updatedUser.achievements = computeAchievementsFromStats({
-        wins: updatedUser.wins || 0,
-        losses: updatedUser.losses || 0,
-        bayesianScore,
-      });
+      updatedUser.achievements = mergeAchievements(
+        updatedUser.achievements,
+        computeAchievementsFromStats({
+          wins: updatedUser.wins || 0,
+          losses: updatedUser.losses || 0,
+          bayesianScore,
+        })
+      );
       return updatedUser.save();
     })
     .then((savedUser) => {
@@ -177,11 +230,14 @@ router.post("/incrementLoss", auth.ensureLoggedIn, (req, res) => {
       const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
       updatedUser.winRate = winRate;
       updatedUser.bayesianScore = bayesianScore;
-      updatedUser.achievements = computeAchievementsFromStats({
-        wins: updatedUser.wins || 0,
-        losses: updatedUser.losses || 0,
-        bayesianScore,
-      });
+      updatedUser.achievements = mergeAchievements(
+        updatedUser.achievements,
+        computeAchievementsFromStats({
+          wins: updatedUser.wins || 0,
+          losses: updatedUser.losses || 0,
+          bayesianScore,
+        })
+      );
       return updatedUser.save();
     })
     .then((savedUser) => {
@@ -212,11 +268,14 @@ router.post("/updateUser", auth.ensureLoggedIn, (req, res) => {
         const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
         updatedUser.winRate = winRate;
         updatedUser.bayesianScore = bayesianScore;
-        updatedUser.achievements = computeAchievementsFromStats({
-          wins: updatedUser.wins || 0,
-          losses: updatedUser.losses || 0,
-          bayesianScore,
-        });
+        updatedUser.achievements = mergeAchievements(
+          updatedUser.achievements,
+          computeAchievementsFromStats({
+            wins: updatedUser.wins || 0,
+            losses: updatedUser.losses || 0,
+            bayesianScore,
+          })
+        );
         return updatedUser.save();
       }
       return updatedUser;
@@ -293,6 +352,37 @@ router.post("/checkUsername", (req, res) => {
     .catch((err) => {
       console.log(`Error checking username: ${err}`);
       res.status(500).send({ err: "Failed to check username" });
+    });
+});
+
+// Unlock specific achievements (e.g., hand-type achievements)
+router.post("/unlockAchievements", auth.ensureLoggedIn, (req, res) => {
+  const { ids } = req.body || {};
+  
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).send({ err: "Achievement IDs array is required" });
+  }
+
+  // Get current user
+  User.findById(req.user._id)
+    .then((user) => {
+      if (!user) {
+        return res.status(404).send({ err: "User not found" });
+      }
+
+      // Merge new achievements with existing ones
+      user.achievements = mergeAchievements(user.achievements, ids);
+      
+      return user.save();
+    })
+    .then((savedUser) => {
+      // Update session with new user data
+      req.session.user = savedUser;
+      res.send(savedUser);
+    })
+    .catch((err) => {
+      console.log(`Error unlocking achievements: ${err}`);
+      res.status(500).send({ err: "Failed to unlock achievements" });
     });
 });
 

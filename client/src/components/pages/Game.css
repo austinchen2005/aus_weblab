@@ -238,6 +238,19 @@
   animation: highlightPulse 0.5s ease;
 }
 
+.card.faint-highlight {
+  background-color: #fff9c4;
+  border-color: #fdd835;
+  box-shadow: 0 2px 6px rgba(255, 235, 59, 0.3);
+}
+
+.card.newly-dealt.faint-highlight {
+  /* Bright highlight takes precedence when both are present */
+  background-color: #ffeb3b;
+  border-color: #fbc02d;
+  box-shadow: 0 4px 12px rgba(255, 235, 59, 0.6);
+}
+
 @keyframes highlightPulse {
   0% {
     transform: scale(1);

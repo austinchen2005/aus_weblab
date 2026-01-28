@@ -32,10 +32,12 @@ const GameInner = () => {
   const [gameEnded, setGameEnded] = useState(false);
   const [isDealing, setIsDealing] = useState(false);
   const [dealTimeout, setDealTimeout] = useState(null);
-  const [newlyDealtCards, setNewlyDealtCards] = useState(new Set()); // Track newly dealt cards for highlight
+  const [newlyDealtCards, setNewlyDealtCards] = useState(new Set()); // Track newly dealt cards for bright highlight (format: "dealer-{index}" or "player-{index}")
+  const [faintHighlightDealerCards, setFaintHighlightDealerCards] = useState(new Set()); // Track dealer cards for faint highlight during Deal session (format: "rank-suit")
   const [showDealerDrawMessage, setShowDealerDrawMessage] = useState(false);
   const [isDealerDrawing, setIsDealerDrawing] = useState(false);
   const [achievementPopups, setAchievementPopups] = useState([]);
+  const [dealerSortMode, setDealerSortMode] = useState('rank'); // 'suit' or 'rank'
   
   // Track grayed-out cells (cards on the board)
   const [grayedOutCards, setGrayedOutCards] = useState(new Set()); // Set of "rank-suit" strings
@@ -98,6 +100,7 @@ const GameInner = () => {
   const deckRef = useRef([]);
   const playerCardsRef = useRef([]);
   const dealerCardsRef = useRef([]);
+  const dealerSortModeRef = useRef('rank');
   const selectedCardsRef = useRef(new Set());
   const grayedOutCardsRef = useRef(new Set());
   const achievementsRef = useRef(new Set());
@@ -253,6 +256,20 @@ const GameInner = () => {
     });
   };
 
+  // Sort dealer cards based on current sort mode preference
+  const sortDealerCards = (cards) => {
+    if (dealerSortModeRef.current === 'rank') {
+      return sortCardsByRank(cards);
+    } else {
+      return sortCardsBySuit(cards);
+    }
+  };
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    dealerSortModeRef.current = dealerSortMode;
+  }, [dealerSortMode]);
+
   // Shuffle deck
   const shuffleDeck = (deck) => {
     const shuffled = [...deck];
@@ -261,372 +278,6 @@ const GameInner = () => {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
-  };
-
-  // Legacy local poker evaluator (no longer used; kept for reference)
-  const legacyEvaluatePokerHand = (cards) => {
-    if (cards.length !== 5) return null;
-    try {
-      return evaluateHand(cards);
-    } catch (err) {
-      console.error("Error evaluating hand:", err);
-      return null;
-    }
-  };
-
-  // Evaluate hand from any number of cards (1-4 cards) - detects pairs, three of a kind, etc.
-  const legacyEvaluateHighCard = (cards) => {
-    if (cards.length === 0) return null;
-    
-    // Convert cards to values
-    const cardValues = cards.map(card => {
-      const rank = card.rank;
-      let value;
-      if (rank === 'A') value = 14;
-      else if (rank === 'K') value = 13;
-      else if (rank === 'Q') value = 12;
-      else if (rank === 'J') value = 11;
-      else value = parseInt(rank, 10);
-      return value;
-    });
-    
-    // Count occurrences of each value
-    const counts = {};
-    for (const value of cardValues) {
-      counts[value] = (counts[value] || 0) + 1;
-    }
-    
-    // Convert value to rank name
-    const valueToRankName = (value) => {
-      if (value === 14) return 'Ace';
-      if (value === 13) return 'King';
-      if (value === 12) return 'Queen';
-      if (value === 11) return 'Jack';
-      return value.toString();
-    };
-    
-    // Check for three of a kind
-    for (const [value, count] of Object.entries(counts)) {
-      if (count === 3) {
-        const val = parseInt(value, 10);
-        return { value: 4, name: `Three of a Kind, ${valueToRankName(val)}`, rank: val };
-      }
-    }
-    
-    // Check for pair
-    for (const [value, count] of Object.entries(counts)) {
-      if (count === 2) {
-        const val = parseInt(value, 10);
-        return { value: 2, name: `Pair of ${valueToRankName(val)}`, rank: val };
-      }
-    }
-    
-    // Check for two pair (if 4 cards)
-    if (cards.length === 4) {
-      const pairs = [];
-      for (const [value, count] of Object.entries(counts)) {
-        if (count === 2) {
-          pairs.push(parseInt(value, 10));
-        }
-      }
-      if (pairs.length === 2) {
-        const highPair = Math.max(...pairs);
-        const lowPair = Math.min(...pairs);
-        return { value: 3, name: `Two Pair, ${valueToRankName(highPair)} and ${valueToRankName(lowPair)}`, rank: highPair };
-      }
-    }
-    
-    // High card
-    const highCard = Math.max(...cardValues);
-    return { value: 1, name: `High card, ${valueToRankName(highCard)}`, rank: highCard };
-  };
-
-  // Find the best possible hand from any number of cards
-  const legacyFindBestHandFromCards = (cards) => {
-    if (cards.length === 0) return null;
-    if (cards.length < 5) {
-      // For less than 5 cards, show high card
-      return legacyEvaluateHighCard(cards);
-    }
-    if (cards.length === 5) {
-      return legacyEvaluatePokerHand(cards);
-    }
-    // For more than 5 cards, find the best 5-card combination
-    return legacyFindBestHand(cards);
-  };
-
-  // Find the best 5-card hand from a larger set of cards (OPTIMIZED: checks best hands first, stops early)
-  const legacyFindBestHand = (cards) => {
-    if (cards.length < 5) return null;
-    if (cards.length === 5) return legacyEvaluatePokerHand(cards);
-    
-    // For small sets, do full search with early termination
-    if (cards.length <= 10) {
-      let bestHand = null;
-      let bestValue = -1;
-      let bestRank = -1;
-      
-      const generateAll = (arr, size, start, combo) => {
-        // Early termination: if we found royal flush, stop
-        if (bestValue >= 10) return;
-        
-        if (combo.length === size) {
-          const handEval = legacyEvaluatePokerHand([...combo]);
-          if (handEval) {
-            const comparison = compareHands(handEval.value, handEval.rank, bestValue, bestRank);
-            if (comparison > 0) {
-              bestHand = handEval;
-              bestValue = handEval.value;
-              bestRank = handEval.rank;
-            }
-          }
-          return;
-        }
-        for (let i = start; i < arr.length; i++) {
-          combo.push(arr[i]);
-          generateAll(arr, size, i + 1, combo);
-          combo.pop();
-          if (bestValue >= 10) return;
-        }
-      };
-      generateAll(cards, 5, 0, []);
-      return bestHand;
-    }
-    
-    // Convert cards to values
-    const cardValues = cards.map(card => {
-      const rank = card.rank;
-      let value;
-      if (rank === 'A') value = 14;
-      else if (rank === 'K') value = 13;
-      else if (rank === 'Q') value = 12;
-      else if (rank === 'J') value = 11;
-      else value = parseInt(rank, 10);
-      return { value, suit: card.suit, rank: card.rank, original: card };
-    });
-    
-    // Group by suit and rank
-    const bySuit = {};
-    const byRank = {};
-    cardValues.forEach(c => {
-      if (!bySuit[c.suit]) bySuit[c.suit] = [];
-      bySuit[c.suit].push(c);
-      if (!byRank[c.value]) byRank[c.value] = [];
-      byRank[c.value].push(c);
-    });
-    
-    let bestHand = null;
-    let bestValue = -1;
-    let bestRank = -1;
-    
-    // Helper: only check if this hand type could beat current best
-    const shouldCheckHandType = (handValue) => {
-      return bestValue < handValue;
-    };
-    
-    // Helper: evaluate and update best if better
-    const tryHand = (combo) => {
-      const handEval = legacyEvaluatePokerHand(combo);
-      if (handEval) {
-        const comparison = compareHands(handEval.value, handEval.rank, bestValue, bestRank);
-        if (comparison > 0) {
-          bestHand = handEval;
-          bestValue = handEval.value;
-          bestRank = handEval.rank;
-          return true;
-        }
-      }
-      return false;
-    };
-    
-    // 1. ROYAL FLUSH (value 10) - Check straight flushes, stop if found
-    if (shouldCheckHandType(10)) {
-      for (const suit in bySuit) {
-        if (bySuit[suit].length >= 5) {
-          const flushCards = bySuit[suit].sort((a, b) => a.value - b.value);
-          // Check for straight flush (including royal)
-          const values = flushCards.map(c => c.value);
-          for (let i = 0; i <= values.length - 5; i++) {
-            const straight = values.slice(i, i + 5);
-            // Check if consecutive (or wheel)
-            let isStraight = true;
-            for (let j = 1; j < 5; j++) {
-              if (straight[j] !== straight[j-1] + 1) {
-                // Check for wheel (A-2-3-4-5)
-                if (j === 4 && straight[0] === 2 && straight[4] === 14) {
-                  isStraight = true;
-                } else {
-                  isStraight = false;
-                  break;
-                }
-              }
-            }
-            if (isStraight) {
-              const combo = flushCards.slice(i, i + 5).map(c => c.original);
-              if (tryHand(combo) && bestValue >= 10) return bestHand;
-            }
-          }
-        }
-      }
-    }
-    
-    // 2. FOUR OF A KIND (value 8) - Only check if we haven't found better
-    if (shouldCheckHandType(8)) {
-      const quads = [];
-      for (const rank in byRank) {
-        if (byRank[rank].length >= 4) {
-          quads.push({ rank: parseInt(rank), cards: byRank[rank] });
-        }
-      }
-      quads.sort((a, b) => b.rank - a.rank);
-      
-      for (const quad of quads) {
-        const kickers = cardValues.filter(c => c.value !== quad.rank).sort((a, b) => b.value - a.value);
-        if (kickers.length > 0) {
-          const combo = [...quad.cards.slice(0, 4), kickers[0]].map(c => c.original);
-          if (tryHand(combo) && bestValue >= 8) break; // Found best possible four of a kind
-        }
-      }
-    }
-    
-    // 3. FULL HOUSE (value 7) - Only check if we haven't found better
-    if (shouldCheckHandType(7)) {
-      const trips = [];
-      const pairs = [];
-      for (const rank in byRank) {
-        if (byRank[rank].length >= 3) trips.push({ rank: parseInt(rank), cards: byRank[rank] });
-        if (byRank[rank].length >= 2) pairs.push({ rank: parseInt(rank), cards: byRank[rank] });
-      }
-      trips.sort((a, b) => b.rank - a.rank);
-      pairs.sort((a, b) => b.rank - a.rank);
-      
-      for (const trip of trips) {
-        for (const pair of pairs) {
-          if (trip.rank !== pair.rank) {
-            const combo = [...trip.cards.slice(0, 3), ...pair.cards.slice(0, 2)].map(c => c.original);
-            if (tryHand(combo)) {
-              // Found a full house, check if it's the best possible
-              if (bestValue >= 7 && bestRank >= trip.rank) break;
-            }
-          }
-        }
-        if (bestValue >= 7) break;
-      }
-    }
-    
-    // 4. FLUSH (value 6) - Only check if we haven't found better
-    if (shouldCheckHandType(6)) {
-      for (const suit in bySuit) {
-        if (bySuit[suit].length >= 5) {
-          const flushCards = bySuit[suit].sort((a, b) => b.value - a.value);
-          // Take top 5 cards (best flush)
-          const combo = flushCards.slice(0, 5).map(c => c.original);
-          if (tryHand(combo) && bestValue >= 6) break; // Found best possible flush
-        }
-      }
-    }
-    
-    // 5. STRAIGHT (value 5) - Only check if we haven't found better
-    if (shouldCheckHandType(5)) {
-      const sortedValues = [...cardValues].sort((a, b) => a.value - b.value);
-      const uniqueValues = [...new Set(sortedValues.map(c => c.value))];
-      
-      // Check for straights
-      for (let i = 0; i <= uniqueValues.length - 5; i++) {
-        const straightValues = uniqueValues.slice(i, i + 5);
-        let isStraight = true;
-        for (let j = 1; j < 5; j++) {
-          if (straightValues[j] !== straightValues[j-1] + 1) {
-            // Check for wheel
-            if (j === 4 && straightValues[0] === 2 && straightValues[4] === 14) {
-              isStraight = true;
-            } else {
-              isStraight = false;
-              break;
-            }
-          }
-        }
-        if (isStraight) {
-          // Get one card of each rank for the straight
-          const combo = [];
-          for (const val of straightValues) {
-            const card = sortedValues.find(c => c.value === val);
-            if (card) combo.push(card.original);
-          }
-          if (combo.length === 5 && tryHand(combo) && bestValue >= 5) break;
-        }
-      }
-    }
-    
-    // 6. THREE OF A KIND (value 4) - Only check if we haven't found better
-    if (shouldCheckHandType(4)) {
-      const trips = [];
-      for (const rank in byRank) {
-        if (byRank[rank].length >= 3) {
-          trips.push({ rank: parseInt(rank), cards: byRank[rank] });
-        }
-      }
-      trips.sort((a, b) => b.rank - a.rank);
-      
-      for (const trip of trips) {
-        const kickers = cardValues.filter(c => c.value !== trip.rank).sort((a, b) => b.value - a.value);
-        if (kickers.length >= 2) {
-          const combo = [...trip.cards.slice(0, 3), kickers[0], kickers[1]].map(c => c.original);
-          if (tryHand(combo) && bestValue >= 4 && bestRank >= trip.rank) break;
-        }
-      }
-    }
-    
-    // 7. TWO PAIR (value 3) - Only check if we haven't found better
-    if (shouldCheckHandType(3)) {
-      const pairs = [];
-      for (const rank in byRank) {
-        if (byRank[rank].length >= 2) {
-          pairs.push({ rank: parseInt(rank), cards: byRank[rank] });
-        }
-      }
-      pairs.sort((a, b) => b.rank - a.rank);
-      
-      for (let i = 0; i < pairs.length - 1; i++) {
-        for (let j = i + 1; j < pairs.length; j++) {
-          const kickers = cardValues.filter(c => c.value !== pairs[i].rank && c.value !== pairs[j].rank)
-            .sort((a, b) => b.value - a.value);
-          if (kickers.length > 0) {
-            const combo = [...pairs[i].cards.slice(0, 2), ...pairs[j].cards.slice(0, 2), kickers[0]].map(c => c.original);
-            if (tryHand(combo) && bestValue >= 3) break;
-          }
-        }
-        if (bestValue >= 3) break;
-      }
-    }
-    
-    // 8. ONE PAIR (value 2) - Only check if we haven't found better
-    if (shouldCheckHandType(2)) {
-      const pairs = [];
-      for (const rank in byRank) {
-        if (byRank[rank].length >= 2) {
-          pairs.push({ rank: parseInt(rank), cards: byRank[rank] });
-        }
-      }
-      pairs.sort((a, b) => b.rank - a.rank);
-      
-      for (const pair of pairs) {
-        const kickers = cardValues.filter(c => c.value !== pair.rank).sort((a, b) => b.value - a.value);
-        if (kickers.length >= 3) {
-          const combo = [...pair.cards.slice(0, 2), ...kickers.slice(0, 3)].map(c => c.original);
-          if (tryHand(combo) && bestValue >= 2 && bestRank >= pair.rank) break;
-        }
-      }
-    }
-    
-    // 9. HIGH CARD (value 1) - Only if nothing better found
-    if (bestHand === null || bestValue < 1) {
-      const sortedCards = [...cardValues].sort((a, b) => b.value - a.value);
-      const combo = sortedCards.slice(0, 5).map(c => c.original);
-      tryHand(combo);
-    }
-    
-    return bestHand;
   };
 
   // Memoize board cards as a Set for O(1) lookup
@@ -698,6 +349,10 @@ const GameInner = () => {
     setGrayedOutColumns(new Set());
     grayedOutCardsRef.current = emptyGrayed;
 
+    // Clear all highlights
+    setNewlyDealtCards(new Set());
+    setFaintHighlightDealerCards(new Set());
+
     // Record a provisional loss in the background so refreshes mid-game count as a loss
     if (userId && !hasPendingLoss) {
       post("/api/incrementLoss")
@@ -731,6 +386,7 @@ const GameInner = () => {
         // Deck is empty - player loses immediately
         setIsDealing(false);
         setNewlyDealtCards(new Set()); // Clear highlights
+        setFaintHighlightDealerCards(new Set()); // Clear faint highlights when dealing ends
         setGameResult("You lose!");
         playLoseSound();
         // If we created a pending loss, it already counts; just sync stats if needed when game ends
@@ -806,6 +462,7 @@ const GameInner = () => {
               playerCardsRef.current = sortedCards;
               setPlayerCards(sortedCards);
               setNewlyDealtCards(new Set());
+              setFaintHighlightDealerCards(new Set()); // Clear faint highlights when dealing ends
               finishGameWithPlayerHand(sortedCards, dealerCardsRef.current);
             }, initialDelay);
           } else {
@@ -817,6 +474,7 @@ const GameInner = () => {
               playerCardsRef.current = sortedCards;
               setPlayerCards(sortedCards);
               setNewlyDealtCards(new Set());
+              setFaintHighlightDealerCards(new Set()); // Clear faint highlights when dealing ends
             }, initialDelay);
           }
         } else {
@@ -825,7 +483,11 @@ const GameInner = () => {
           dealerCardsRef.current = newDealerCards;
           setDealerCards(newDealerCards);
           
-          // Highlight newly dealt card (it's at the end)
+          // Add to faint highlight set (will persist) - use card identifier
+          const cardKey = `${firstCard.rank}-${firstCard.suit}`;
+          setFaintHighlightDealerCards(prev => new Set(prev).add(cardKey));
+          
+          // Bright highlight for newest card
           const highlightIndex = newDealerCards.length - 1;
           setNewlyDealtCards(new Set([`dealer-${highlightIndex}`]));
           
@@ -833,9 +495,10 @@ const GameInner = () => {
           // Use ref to get current state when timeout executes
           setTimeout(() => {
             const currentCards = dealerCardsRef.current;
-            const sortedCards = sortCards(currentCards);
+            const sortedCards = sortDealerCards(currentCards);
             dealerCardsRef.current = sortedCards;
             setDealerCards(sortedCards);
+            // Clear bright highlight but keep faint highlight (tracked by card key, not index)
             setNewlyDealtCards(new Set());
           }, initialDelay);
           
@@ -857,6 +520,7 @@ const GameInner = () => {
         // Deck is empty - player loses immediately
         setIsDealing(false);
         setNewlyDealtCards(new Set()); // Clear highlights
+        setFaintHighlightDealerCards(new Set()); // Clear faint highlights when dealing ends
         setGameResult("You lose!");
         playLoseSound();
         // If we created a pending loss, it already counts; just sync stats if needed when game ends
@@ -932,6 +596,7 @@ const GameInner = () => {
               playerCardsRef.current = sortedCards;
               setPlayerCards(sortedCards);
               setNewlyDealtCards(new Set());
+              setFaintHighlightDealerCards(new Set()); // Clear faint highlights when dealing ends
               finishGameWithPlayerHand(sortedCards, dealerCardsRef.current);
             }, repeatDelay);
           } else {
@@ -943,6 +608,7 @@ const GameInner = () => {
               playerCardsRef.current = sortedCards;
               setPlayerCards(sortedCards);
               setNewlyDealtCards(new Set());
+              setFaintHighlightDealerCards(new Set()); // Clear faint highlights when dealing ends
             }, repeatDelay);
           }
         } else {
@@ -951,7 +617,11 @@ const GameInner = () => {
           dealerCardsRef.current = newDealerCards;
           setDealerCards(newDealerCards);
           
-          // Highlight newly dealt card (it's at the end)
+          // Add to faint highlight set (will persist) - use card identifier
+          const cardKey = `${nextCard.rank}-${nextCard.suit}`;
+          setFaintHighlightDealerCards(prev => new Set(prev).add(cardKey));
+          
+          // Bright highlight for newest card
           const highlightIndex = newDealerCards.length - 1;
           setNewlyDealtCards(new Set([`dealer-${highlightIndex}`]));
           
@@ -959,9 +629,10 @@ const GameInner = () => {
           // Use ref to get current state when timeout executes
           setTimeout(() => {
             const currentCards = dealerCardsRef.current;
-            const sortedCards = sortCards(currentCards);
+            const sortedCards = sortDealerCards(currentCards);
             dealerCardsRef.current = sortedCards;
             setDealerCards(sortedCards);
+            // Clear bright highlight but keep faint highlight (tracked by card key, not index)
             setNewlyDealtCards(new Set());
           }, repeatDelay);
           
@@ -999,6 +670,9 @@ const GameInner = () => {
     setShowDealerDrawMessage(true);
     setIsDealerDrawing(true);
     
+    // Clear faint highlights when dealer drawing phase starts (different from Deal session)
+    setFaintHighlightDealerCards(new Set());
+    
     let currentDeck = deckRef.current;
     let currentDealerCards = [...dealerCards];
     let cardsDealt = 0;
@@ -1007,7 +681,7 @@ const GameInner = () => {
     const dealNextDealerCard = () => {
       if (cardsDealt >= cardsNeeded || currentDeck.length === 0) {
         // Done dealing - sort final cards before evaluating
-        const sortedDealerCards = sortCards(currentDealerCards);
+        const sortedDealerCards = sortDealerCards(currentDealerCards);
         deckRef.current = currentDeck;
         dealerCardsRef.current = sortedDealerCards;
         setDeck(currentDeck);
@@ -1084,7 +758,7 @@ const GameInner = () => {
       const dealerDelay = getSetting('dealerDrawDelay');
       setTimeout(() => {
         const currentCards = dealerCardsRef.current;
-        const sortedCards = sortCards(currentCards);
+        const sortedCards = sortDealerCards(currentCards);
         dealerCardsRef.current = sortedCards;
         setDealerCards(sortedCards);
         setNewlyDealtCards(new Set());
@@ -1104,6 +778,10 @@ const GameInner = () => {
 
   // Evaluate game after player gets 5 cards
   const evaluateGame = (finalPlayerCards, finalDealerCards) => {
+    // Clear all highlights when game ends
+    setNewlyDealtCards(new Set());
+    setFaintHighlightDealerCards(new Set());
+    
     const { playerHand: playerHandEval, dealerHand: dealerHandEval, comparison } =
       evaluateHands(finalPlayerCards, finalDealerCards);
 
@@ -1120,30 +798,84 @@ const GameInner = () => {
         // Update wins: send to server if logged in
         if (userId) {
           // If we created a pending loss at game start, cancel that loss and add a win instead
+          console.log("Player hand evaluation:", playerHandEval);
+          const handAchievementIds = getHandAchievementIds(playerHandEval);
+          console.log("Hand achievement IDs:", handAchievementIds);
+
+          // Optimistic update: show new stats immediately
+          const newWins = hasPendingLoss ? wins + 1 : wins + 1;
+          const newLosses = hasPendingLoss ? losses : losses;
+          const newTotal = newWins + newLosses;
+          const newWinRate = newTotal > 0 ? newWins / newTotal : 0;
+          const newBayesianScore = (newWins + 0) / (newWins + newLosses + 0 + 10);
+          
+          setWins(newWins);
+          setLosses(newLosses);
+          setWinRate(newWinRate);
+          setBayesianScore(newBayesianScore);
+          if (hasPendingLoss) {
+            setHasPendingLoss(false);
+          }
+
+          const unlockHandAchievements = (baseUser) => {
+            if (!handAchievementIds.length) {
+              console.log("No hand achievement IDs to unlock for hand:", playerHandEval);
+              return Promise.resolve(baseUser);
+            }
+            console.log("Unlocking achievements:", handAchievementIds, "for hand:", playerHandEval);
+            return post("/api/unlockAchievements", { ids: handAchievementIds }).then(
+              (userWithAchievements) => {
+                console.log("Achievements unlocked, user now has:", userWithAchievements.achievements);
+                handleAchievementsFromUser(userWithAchievements);
+                return userWithAchievements;
+              }
+            ).catch((err) => {
+              console.error("Failed to unlock achievements:", err);
+              return baseUser; // Return base user if achievement unlock fails
+            });
+          };
+
           if (hasPendingLoss) {
             post("/api/updateStats", { wins: wins + 1, losses })
-              .then((updatedUser) => {
-                setWins(updatedUser.wins || 0);
-                setLosses(updatedUser.losses || 0);
-                setWinRate(updatedUser.winRate || 0);
-                setBayesianScore(updatedUser.bayesianScore || 0);
-                setHasPendingLoss(false);
-                handleAchievementsFromUser(updatedUser);
-              })
+              .then((updatedUser) =>
+                unlockHandAchievements(updatedUser).then((finalUser) => {
+                  // Update with server values (may differ slightly due to server-side calculation)
+                  setWins(finalUser.wins || 0);
+                  setLosses(finalUser.losses || 0);
+                  setWinRate(finalUser.winRate || 0);
+                  setBayesianScore(finalUser.bayesianScore || 0);
+                })
+              )
               .catch((err) => {
                 console.error("Failed to convert pending loss to win on server:", err);
+                // Revert optimistic update on error
+                get("/api/whoami").then((userData) => {
+                  setWins(userData.wins || 0);
+                  setLosses(userData.losses || 0);
+                  setWinRate(userData.winRate || 0);
+                  setBayesianScore(userData.bayesianScore || 0);
+                });
               });
           } else {
             post("/api/incrementWin")
-              .then((updatedUser) => {
-                setWins(updatedUser.wins || 0);
-                setLosses(updatedUser.losses || 0);
-                setWinRate(updatedUser.winRate || 0);
-                setBayesianScore(updatedUser.bayesianScore || 0);
-                handleAchievementsFromUser(updatedUser);
-              })
+              .then((updatedUser) =>
+                unlockHandAchievements(updatedUser).then((finalUser) => {
+                  // Update with server values (may differ slightly due to server-side calculation)
+                  setWins(finalUser.wins || 0);
+                  setLosses(finalUser.losses || 0);
+                  setWinRate(finalUser.winRate || 0);
+                  setBayesianScore(finalUser.bayesianScore || 0);
+                })
+              )
               .catch((err) => {
                 console.error("Failed to update win on server:", err);
+                // Revert optimistic update on error
+                get("/api/whoami").then((userData) => {
+                  setWins(userData.wins || 0);
+                  setLosses(userData.losses || 0);
+                  setWinRate(userData.winRate || 0);
+                  setBayesianScore(userData.bayesianScore || 0);
+                });
               });
           }
         }
@@ -1279,11 +1011,40 @@ const GameInner = () => {
     });
   };
 
+  // Map a winning hand to achievement IDs
+  const getHandAchievementIds = (hand) => {
+    if (!hand) return [];
+    switch (hand.value) {
+      case 10:
+        return ["royalty"];
+      case 9:
+        return ["ruler_flush"];
+      case 8:
+        return ["leg_day"];
+      case 7:
+        return ["filled_home"];
+      case 6:
+        return ["flush_toilet"];
+      case 5:
+        return ["straightforward"];
+      case 4:
+        return ["ouch"];
+      case 3:
+        return ["twos_better_than_one"];
+      case 2:
+        return ["got_a_pair"];
+      case 1:
+        return ["no_hand_needed"];
+      default:
+        return [];
+    }
+  };
+
   // Card component
-  const Card = ({ card, isHighlighted }) => {
+  const Card = ({ card, isHighlighted, isFaintHighlighted }) => {
     const isRed = card.suit === '♥' || card.suit === '♦';
     return (
-      <div className={`card ${isHighlighted ? 'newly-dealt' : ''}`}>
+      <div className={`card ${isHighlighted ? 'newly-dealt' : ''} ${isFaintHighlighted ? 'faint-highlight' : ''}`}>
         <div className={`card-rank ${isRed ? 'red' : ''}`}>{card.rank}</div>
         <div className={`card-suit ${isRed ? 'red' : ''}`}>{card.suit}</div>
       </div>
@@ -1388,6 +1149,7 @@ const GameInner = () => {
               <button 
                 className="sort-btn"
                 onClick={() => {
+                  setDealerSortMode('suit');
                   const sorted = sortCardsBySuit(dealerCards);
                   dealerCardsRef.current = sorted;
                   setDealerCards(sorted);
@@ -1399,6 +1161,7 @@ const GameInner = () => {
               <button 
                 className="sort-btn"
                 onClick={() => {
+                  setDealerSortMode('rank');
                   const sorted = sortCardsByRank(dealerCards);
                   dealerCardsRef.current = sorted;
                   setDealerCards(sorted);
@@ -1413,13 +1176,17 @@ const GameInner = () => {
             <div className="hand-name">Hand: {dealerHand.name}</div>
           )}
           <div className="cards-display">
-            {dealerCards.map((card, index) => (
-              <Card 
-                key={index} 
-                card={card} 
-                isHighlighted={newlyDealtCards.has(`dealer-${index}`)}
-              />
-            ))}
+            {dealerCards.map((card, index) => {
+              const cardKey = `${card.rank}-${card.suit}`;
+              return (
+                <Card 
+                  key={index} 
+                  card={card} 
+                  isHighlighted={newlyDealtCards.has(`dealer-${index}`)}
+                  isFaintHighlighted={faintHighlightDealerCards.has(cardKey)}
+                />
+              );
+            })}
           </div>
         </div>
       </div>

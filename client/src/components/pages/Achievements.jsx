@@ -58,7 +58,9 @@ const Achievements = () => {
                 {ach.title}
                 {completed && <span className="achievement-tag">Completed</span>}
               </div>
-              <div className="achievement-description">{ach.description}</div>
+              {completed && (
+                <div className="achievement-description">{ach.description}</div>
+              )}
             </div>
           );
         })}
