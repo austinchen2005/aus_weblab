@@ -52,7 +52,7 @@ const Settings = () => {
   const parseDelay = (str) => {
     const value = parseFloat(str);
     if (isNaN(value)) return 0.2;
-    return Math.max(0.1, Math.min(2.0, value)) * 1000; // Convert to ms
+    return Math.max(0.1, Math.min(5.0, value)) * 1000; // Convert to ms
   };
 
   const handleChangeUsername = () => {
@@ -113,7 +113,7 @@ const Settings = () => {
               type="range"
               id="initialDealDelay"
               min="100"
-              max="2000"
+              max="5000"
               step="50"
               value={settings.initialDealDelay}
               onChange={(e) => updateSetting('initialDealDelay', parseInt(e.target.value))}
@@ -122,7 +122,7 @@ const Settings = () => {
             <input
               type="number"
               min="0.1"
-              max="2.0"
+              max="5.0"
               step="0.05"
               value={(settings.initialDealDelay / 1000).toFixed(2)}
               onChange={(e) => updateSetting('initialDealDelay', parseDelay(e.target.value))}
@@ -140,7 +140,7 @@ const Settings = () => {
               type="range"
               id="repeatDealDelay"
               min="100"
-              max="2000"
+              max="5000"
               step="50"
               value={settings.repeatDealDelay}
               onChange={(e) => updateSetting('repeatDealDelay', parseInt(e.target.value))}
@@ -149,7 +149,7 @@ const Settings = () => {
             <input
               type="number"
               min="0.1"
-              max="2.0"
+              max="5.0"
               step="0.05"
               value={(settings.repeatDealDelay / 1000).toFixed(2)}
               onChange={(e) => updateSetting('repeatDealDelay', parseDelay(e.target.value))}
@@ -167,7 +167,7 @@ const Settings = () => {
               type="range"
               id="dealerDrawDelay"
               min="100"
-              max="2000"
+              max="5000"
               step="50"
               value={settings.dealerDrawDelay}
               onChange={(e) => updateSetting('dealerDrawDelay', parseInt(e.target.value))}
@@ -176,7 +176,7 @@ const Settings = () => {
             <input
               type="number"
               min="0.1"
-              max="2.0"
+              max="5.0"
               step="0.05"
               value={(settings.dealerDrawDelay / 1000).toFixed(2)}
               onChange={(e) => updateSetting('dealerDrawDelay', parseDelay(e.target.value))}

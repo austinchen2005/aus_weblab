@@ -14,6 +14,8 @@ const suits = ['♥', '♦', '♣', '♠']; // Heart, Diamond, Club, Spade
 const suitsDisplay = ['♥', '♦', '♣', '♠'];
 const ranks = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
 
+const STORAGE_KEY = "poker_game_state_v1";
+
 const GameInner = () => {
   const { userId, user } = useContext(UserContext);
   const [deck, setDeck] = useState([]);
@@ -26,7 +28,6 @@ const GameInner = () => {
   const [losses, setLosses] = useState(0);
   const [winRate, setWinRate] = useState(0); // fraction from server
   const [bayesianScore, setBayesianScore] = useState(0);
-  const [hasPendingLoss, setHasPendingLoss] = useState(false);
   const [selectedCards, setSelectedCards] = useState(new Set()); // Store as "rank-suit" strings
   const [gameStarted, setGameStarted] = useState(false);
   const [gameEnded, setGameEnded] = useState(false);
@@ -104,6 +105,9 @@ const GameInner = () => {
   const selectedCardsRef = useRef(new Set());
   const grayedOutCardsRef = useRef(new Set());
   const achievementsRef = useRef(new Set());
+  const lastRuleSingleCardRef = useRef(false);
+  const fifthRuleAllCardsRef = useRef(false);
+  const fifthRuleDealerZeroRef = useRef(false);
   
   // Ref for throttling dealer hand evaluation
   const dealerHandEvaluationTimeoutRef = useRef(null);
@@ -336,6 +340,9 @@ const GameInner = () => {
     // Reset refs
     playerCardsRef.current = [];
     dealerCardsRef.current = [];
+    lastRuleSingleCardRef.current = false;
+    fifthRuleAllCardsRef.current = false;
+    fifthRuleDealerZeroRef.current = false;
     
     // Reset selection state
     const emptySelection = new Set();
@@ -353,17 +360,6 @@ const GameInner = () => {
     setNewlyDealtCards(new Set());
     setFaintHighlightDealerCards(new Set());
 
-    // Record a provisional loss in the background so refreshes mid-game count as a loss
-    if (userId && !hasPendingLoss) {
-      post("/api/incrementLoss")
-        .then(() => {
-          // Don't update visible stats yet; just remember there is a pending loss
-          setHasPendingLoss(true);
-        })
-        .catch((err) => {
-          console.error("Failed to create pending loss on game start:", err);
-        });
-    }
   };
 
   // Deal one card sequentially with delays
@@ -390,6 +386,12 @@ const GameInner = () => {
         setGameResult("You lose!");
         playLoseSound();
         // If we created a pending loss, it already counts; just sync stats if needed when game ends
+        if (userId) {
+          const payload = { playerHandName: null, dealerHandName: null };
+          post("/api/incrementLoss", payload).catch((err) => {
+            console.error("Failed to record loss on deck-out:", err);
+          });
+        }
         setGameEnded(true);
         return;
       }
@@ -454,6 +456,13 @@ const GameInner = () => {
         
           // Check if player has 5 cards - game ends
           if (newPlayerCards.length === 5) {
+            // Record whether the last rule (5th rule) had special properties
+            const cardsOnBoard = newPlayerCards.length + dealerCardsRef.current.length;
+            const cardsRemaining = 52 - cardsOnBoard;
+            lastRuleSingleCardRef.current = selectedCardsRef.current.size === 1;
+            fifthRuleAllCardsRef.current =
+              cardsRemaining > 0 && selectedCardsRef.current.size === cardsRemaining;
+            fifthRuleDealerZeroRef.current = dealerCardsRef.current.length === 0;
             // For last card, sort after highlight period, then finish game
             // Use initial delay for highlight period
             setTimeout(() => {
@@ -524,6 +533,12 @@ const GameInner = () => {
         setGameResult("You lose!");
         playLoseSound();
         // If we created a pending loss, it already counts; just sync stats if needed when game ends
+        if (userId) {
+          const payload = { playerHandName: null, dealerHandName: null };
+          post("/api/incrementLoss", payload).catch((err) => {
+            console.error("Failed to record loss on deck-out:", err);
+          });
+        }
         setGameEnded(true);
         return;
       }
@@ -588,6 +603,8 @@ const GameInner = () => {
         
           // Check if player has 5 cards - game ends
           if (newPlayerCards.length === 5) {
+            // Record whether the last rule (5th rule) had exactly one card selected
+            lastRuleSingleCardRef.current = selectedCardsRef.current.size === 1;
             // For last card, sort after highlight period, then finish game
             // Use repeat delay for highlight period
             setTimeout(() => {
@@ -800,11 +817,24 @@ const GameInner = () => {
           // If we created a pending loss at game start, cancel that loss and add a win instead
           console.log("Player hand evaluation:", playerHandEval);
           const handAchievementIds = getHandAchievementIds(playerHandEval);
+          // Special rule-based achievements
+          if (lastRuleSingleCardRef.current) {
+            handAchievementIds.push("heart_of_the_cards");
+          }
+          if (fifthRuleAllCardsRef.current) {
+            handAchievementIds.push("give_me_everything");
+          }
+          if (fifthRuleDealerZeroRef.current) {
+            handAchievementIds.push("stacked_deck");
+          }
+          if (dealerCards.length >= 26) {
+            handAchievementIds.push("against_all_odds");
+          }
           console.log("Hand achievement IDs:", handAchievementIds);
 
           // Optimistic update: show new stats immediately
-          const newWins = hasPendingLoss ? wins + 1 : wins + 1;
-          const newLosses = hasPendingLoss ? losses : losses;
+          const newWins = wins + 1;
+          const newLosses = losses;
           const newTotal = newWins + newLosses;
           const newWinRate = newTotal > 0 ? newWins / newTotal : 0;
           const newBayesianScore = (newWins + 0) / (newWins + newLosses + 0 + 10);
@@ -813,9 +843,6 @@ const GameInner = () => {
           setLosses(newLosses);
           setWinRate(newWinRate);
           setBayesianScore(newBayesianScore);
-          if (hasPendingLoss) {
-            setHasPendingLoss(false);
-          }
 
           const unlockHandAchievements = (baseUser) => {
             if (!handAchievementIds.length) {
@@ -835,29 +862,12 @@ const GameInner = () => {
             });
           };
 
-          if (hasPendingLoss) {
-            post("/api/updateStats", { wins: wins + 1, losses })
-              .then((updatedUser) =>
-                unlockHandAchievements(updatedUser).then((finalUser) => {
-                  // Update with server values (may differ slightly due to server-side calculation)
-                  setWins(finalUser.wins || 0);
-                  setLosses(finalUser.losses || 0);
-                  setWinRate(finalUser.winRate || 0);
-                  setBayesianScore(finalUser.bayesianScore || 0);
-                })
-              )
-              .catch((err) => {
-                console.error("Failed to convert pending loss to win on server:", err);
-                // Revert optimistic update on error
-                get("/api/whoami").then((userData) => {
-                  setWins(userData.wins || 0);
-                  setLosses(userData.losses || 0);
-                  setWinRate(userData.winRate || 0);
-                  setBayesianScore(userData.bayesianScore || 0);
-                });
-              });
-          } else {
-            post("/api/incrementWin")
+          const historyPayload = {
+            playerHandName: playerHandEval?.name || null,
+            dealerHandName: dealerHandEval?.name || null,
+          };
+
+          post("/api/incrementWin", historyPayload)
               .then((updatedUser) =>
                 unlockHandAchievements(updatedUser).then((finalUser) => {
                   // Update with server values (may differ slightly due to server-side calculation)
@@ -877,7 +887,6 @@ const GameInner = () => {
                   setBayesianScore(userData.bayesianScore || 0);
                 });
               });
-          }
         }
       } else if (comparison < 0) {
         setGameResult("You lose!");
@@ -885,35 +894,21 @@ const GameInner = () => {
         
         // Update losses: send to server if logged in
         if (userId) {
-          if (hasPendingLoss) {
-            // Pending loss already recorded; just sync visible stats from server
-            get("/api/whoami")
-              .then((userData) => {
-                if (userData._id) {
-                  setWins(userData.wins || 0);
-                  setLosses(userData.losses || 0);
-                  setWinRate(userData.winRate || 0);
-                  setBayesianScore(userData.bayesianScore || 0);
-                  handleAchievementsFromUser(userData);
-                }
-                setHasPendingLoss(false);
-              })
-              .catch((err) => {
-                console.error("Failed to sync loss stats from server:", err);
-              });
-          } else {
-            post("/api/incrementLoss")
-              .then((updatedUser) => {
-                setWins(updatedUser.wins || 0);
-                setLosses(updatedUser.losses || 0);
-                setWinRate(updatedUser.winRate || 0);
-                setBayesianScore(updatedUser.bayesianScore || 0);
-                handleAchievementsFromUser(updatedUser);
-              })
-              .catch((err) => {
-                console.error("Failed to update loss on server:", err);
-              });
-          }
+          const payload = {
+            playerHandName: playerHandEval?.name || null,
+            dealerHandName: dealerHandEval?.name || null,
+          };
+          post("/api/incrementLoss", payload)
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+              setWinRate(updatedUser.winRate || 0);
+              setBayesianScore(updatedUser.bayesianScore || 0);
+              handleAchievementsFromUser(updatedUser);
+            })
+            .catch((err) => {
+              console.error("Failed to update loss on server:", err);
+            });
         }
       } else {
         // Ties are losses
@@ -922,35 +917,21 @@ const GameInner = () => {
         
         // Update losses: send to server if logged in
         if (userId) {
-          if (hasPendingLoss) {
-            // Pending loss already recorded; just sync visible stats from server
-            get("/api/whoami")
-              .then((userData) => {
-                if (userData._id) {
-                  setWins(userData.wins || 0);
-                  setLosses(userData.losses || 0);
-                  setWinRate(userData.winRate || 0);
-                  setBayesianScore(userData.bayesianScore || 0);
-                  handleAchievementsFromUser(userData);
-                }
-                setHasPendingLoss(false);
-              })
-              .catch((err) => {
-                console.error("Failed to sync loss stats from server:", err);
-              });
-          } else {
-            post("/api/incrementLoss")
-              .then((updatedUser) => {
-                setWins(updatedUser.wins || 0);
-                setLosses(updatedUser.losses || 0);
-                setWinRate(updatedUser.winRate || 0);
-                setBayesianScore(updatedUser.bayesianScore || 0);
-                handleAchievementsFromUser(updatedUser);
-              })
-              .catch((err) => {
-                console.error("Failed to update loss on server:", err);
-              });
-          }
+          const payload = {
+            playerHandName: playerHandEval?.name || null,
+            dealerHandName: dealerHandEval?.name || null,
+          };
+          post("/api/incrementLoss", payload)
+            .then((updatedUser) => {
+              setWins(updatedUser.wins || 0);
+              setLosses(updatedUser.losses || 0);
+              setWinRate(updatedUser.winRate || 0);
+              setBayesianScore(updatedUser.bayesianScore || 0);
+              handleAchievementsFromUser(updatedUser);
+            })
+            .catch((err) => {
+              console.error("Failed to update loss on server:", err);
+            });
         }
       }
     }
@@ -1055,8 +1036,110 @@ const GameInner = () => {
   const winRatePercent = (winRate * 100).toFixed(1);
   const bayesianScoreDisplay = bayesianScore.toFixed(3);
 
+  // --- Persist game state so it survives route changes / refreshes ---
+
+  // Load saved game state on mount (per user)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved || !saved.userId || saved.userId !== userId) return;
+
+      if (saved.gameStarted) {
+        setGameStarted(true);
+        setGameEnded(Boolean(saved.gameEnded));
+
+        const savedDeck = Array.isArray(saved.deck) ? saved.deck : [];
+        const savedPlayerCards = Array.isArray(saved.playerCards)
+          ? saved.playerCards
+          : [];
+        const savedDealerCards = Array.isArray(saved.dealerCards)
+          ? saved.dealerCards
+          : [];
+
+        setDeck(savedDeck);
+        deckRef.current = savedDeck;
+
+        setPlayerCards(savedPlayerCards);
+        playerCardsRef.current = savedPlayerCards;
+
+        setDealerCards(savedDealerCards);
+        dealerCardsRef.current = savedDealerCards;
+
+        const selected = new Set(saved.selectedCards || []);
+        setSelectedCards(selected);
+        selectedCardsRef.current = selected;
+
+        const grayed = new Set(saved.grayedOutCards || []);
+        setGrayedOutCards(grayed);
+        grayedOutCardsRef.current = grayed;
+
+        setGrayedOutRows(new Set(saved.grayedOutRows || []));
+        setGrayedOutColumns(new Set(saved.grayedOutColumns || []));
+
+        // Legacy flag from older logic; no longer used to drive server stats
+        // kept only so older saved objects don't break.
+      }
+    } catch (e) {
+      console.error("Failed to load saved game state:", e);
+    }
+  }, [userId]);
+
+  // Save game state whenever core fields change (only while a game has started)
+  useEffect(() => {
+    if (!gameStarted) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    try {
+      const payload = {
+        userId,
+        gameStarted,
+        gameEnded,
+        deck,
+        playerCards,
+        dealerCards,
+        selectedCards: Array.from(selectedCards),
+        grayedOutCards: Array.from(grayedOutCards),
+        grayedOutRows: Array.from(grayedOutRows),
+        grayedOutColumns: Array.from(grayedOutColumns),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.error("Failed to save game state:", e);
+    }
+  }, [
+    userId,
+    gameStarted,
+    gameEnded,
+    deck,
+    playerCards,
+    dealerCards,
+    selectedCards,
+    grayedOutCards,
+    grayedOutRows,
+    grayedOutColumns,
+  ]);
+
   return (
     <div className="game-container">
+      {userId && (
+        <button
+          type="button"
+          className="hidden-spade-hitbox"
+          aria-label="Spade"
+          onClick={() => {
+            post("/api/unlockAchievements", { ids: ["hidden_spade"] })
+              .then((userWithAchievements) => {
+                handleAchievementsFromUser(userWithAchievements);
+              })
+              .catch((err) => {
+                console.error("Failed to unlock hidden spade achievement:", err);
+              });
+          }}
+        />
+      )}
       {achievementPopups.length > 0 && (
         <div className="achievement-popup-container">
           {achievementPopups.map((popup) => (
@@ -1067,7 +1150,7 @@ const GameInner = () => {
           ))}
         </div>
       )}
-      <h1>Poker Game</h1>
+          <h1>5-8 Poker Game</h1>
       
       <div className="stats-display">
         <div className="stat-item">
@@ -1201,6 +1284,8 @@ const GameInner = () => {
             grayedOutRows={grayedOutRows}
             grayedOutColumns={grayedOutColumns}
             isDealing={isDealing}
+            playerCards={playerCards}
+            dealerCards={dealerCards}
           />
           {/* Statistics below matrix */}
           <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px', fontSize: '0.95rem' }}>
@@ -1267,7 +1352,7 @@ const Game = () => {
   if (!userId) {
     return (
       <div className="game-container">
-        <h1>Poker Game</h1>
+        <h1>5-8 Poker Game</h1>
         <p>Please login first.</p>
         <Skeleton />
       </div>

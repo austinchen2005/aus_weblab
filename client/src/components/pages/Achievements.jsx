@@ -9,23 +9,35 @@ import Skeleton from "./Skeleton";
 const Achievements = () => {
   const { userId, user, setUser } = useContext(UserContext);
   const [loading, setLoading] = useState(true);
+  const [achievementStats, setAchievementStats] = useState(null);
 
   useEffect(() => {
-    if (!userId) {
+    if (userId) {
+      get("/api/whoami")
+        .then((userData) => {
+          if (userData._id) {
+            setUser(userData);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load user for achievements:", err);
+        })
+        .finally(() => setLoading(false));
+    } else {
       setLoading(false);
-      return;
     }
-    get("/api/whoami")
-      .then((userData) => {
-        if (userData._id) {
-          setUser(userData);
-        }
+  }, [userId, setUser]);
+
+  // Load global achievement statistics (percent of users who have each achievement)
+  useEffect(() => {
+    get("/api/achievementStats")
+      .then((stats) => {
+        setAchievementStats(stats);
       })
       .catch((err) => {
-        console.error("Failed to load user for achievements:", err);
-      })
-      .finally(() => setLoading(false));
-  }, [userId, setUser]);
+        console.error("Failed to load achievement stats:", err);
+      });
+  }, []);
 
   if (!userId) {
     return (
@@ -39,12 +51,20 @@ const Achievements = () => {
 
   const completedIds = new Set(user?.achievements || []);
 
+  const getPercent = (id) => {
+    if (!achievementStats || !achievementStats.percentages) return 0;
+    const val = achievementStats.percentages[id];
+    if (typeof val !== "number" || Number.isNaN(val)) return 0;
+    return val;
+  };
+
   return (
     <div className="page-container achievements-page">
       <h1>Achievements</h1>
       <div className="achievements-list">
         {ACHIEVEMENTS.map((ach) => {
           const completed = completedIds.has(ach.id);
+            const pct = getPercent(ach.id);
           return (
             <div
               key={ach.id}
@@ -61,6 +81,9 @@ const Achievements = () => {
               {completed && (
                 <div className="achievement-description">{ach.description}</div>
               )}
+                <div className="achievement-stats">
+                  {pct.toFixed(1)}% of players have this achievement.
+                </div>
             </div>
           );
         })}

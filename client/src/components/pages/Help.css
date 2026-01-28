@@ -8,9 +8,10 @@
 }
 
 .rules-btn {
-  background-color: #3498db;
+  background-color: var(--blue);
   color: white;
   border: none;
+  display: block;
   padding: 1rem 2rem;
   font-size: 1.2rem;
   font-weight: 600;
@@ -21,7 +22,7 @@
 }
 
 .rules-btn:hover {
-  background-color: #2980b9;
+  background-color: rgba(12, 142, 244, 0.85);
 }
 
 .rules-btn:active {
@@ -29,17 +30,17 @@
 }
 
 .bayes-btn {
-  background-color: #6366f1; /* indigo-ish to distinguish */
+  background-color: var(--blue);
 }
 
 .bayes-btn:hover {
-  background-color: #4f46e5;
+  background-color: rgba(12, 142, 244, 0.85);
 }
 
 .rules-display {
-  background-color: #f8f9fa;
-  border: 2px solid #e0e0e0;
-  border-left: 10px solid #3498db;
+  background-color: var(--surface);
+  border: 2px solid var(--border);
+  border-left: 10px solid var(--blue);
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -60,14 +61,14 @@
 .rules-text {
   font-size: 1.1rem;
   line-height: 1.8;
-  color: #2c3e50;
+  color: var(--ink);
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
 }
 
 .reset-profile-btn {
-  background-color: #e74c3c;
+  background-color: var(--pink);
   color: white;
   border: none;
   padding: 1rem 2rem;
@@ -81,7 +82,7 @@
 }
 
 .reset-profile-btn:hover {
-  background-color: #c0392b;
+  background-color: rgba(211, 4, 93, 0.85);
 }
 
 .reset-profile-btn:active {
@@ -103,7 +104,7 @@
 }
 
 .popup-content {
-  background-color: white;
+  background-color: var(--surface);
   border-radius: 12px;
   padding: 2rem;
   max-width: 500px;
@@ -125,7 +126,7 @@
 
 .popup-message {
   font-size: 1.1rem;
-  color: #2c3e50;
+  color: var(--ink);
   margin-bottom: 2rem;
   line-height: 1.6;
   text-align: center;
@@ -149,21 +150,21 @@
 }
 
 .popup-btn-no {
-  background-color: #95a5a6;
+  background-color: rgba(43, 56, 76, 0.55);
   color: white;
 }
 
 .popup-btn-no:hover {
-  background-color: #7f8c8d;
+  background-color: rgba(43, 56, 76, 0.75);
   transform: translateY(-2px);
 }
 
 .popup-btn-yes {
-  background-color: #e74c3c;
+  background-color: var(--pink);
   color: white;
 }
 
 .popup-btn-yes:hover {
-  background-color: #c0392b;
+  background-color: rgba(211, 4, 93, 0.85);
   transform: translateY(-2px);
 }

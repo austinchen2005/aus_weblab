@@ -22,6 +22,8 @@ const SelectionMatrix = ({
   grayedOutRows,
   grayedOutColumns,
   isDealing,
+  playerCards = [],
+  dealerCards = [],
 }) => {
   const [selectedColumns, setSelectedColumns] = useState(new Set());
   const [selectedRows, setSelectedRows] = useState(new Set());
@@ -42,6 +44,21 @@ const SelectionMatrix = ({
   // Helper: check if a card is grayed out / on the board
   const isCardInBoard = (rank, suit) => {
     return grayedOutCards.has(`${rank}-${suit}`);
+  };
+
+  // Helper: select all selectable cards in the given ranks (columns)
+  const selectColumnsForRanks = (rankList) => {
+    if (!rankList || rankList.length === 0) return;
+    const newSelected = new Set(selectedCards);
+    rankList.forEach((rank) => {
+      suitsDisplay.forEach((suit) => {
+        if (!isCardInBoard(rank, suit)) {
+          newSelected.add(`${rank}-${suit}`);
+        }
+      });
+    });
+    updateColumnRowStates(newSelected);
+    onSelectionChange(newSelected);
   };
 
   // Update column and row selection states based on selected cards
@@ -419,6 +436,54 @@ const SelectionMatrix = ({
 
   return (
     <>
+      <div className="matrix-shortcuts">
+        <button
+          className="matrix-shortcut-btn"
+          type="button"
+          disabled={isDealing}
+          onClick={() => {
+            if (isDealing) return;
+            const ranksFromPlayer = Array.from(
+              new Set(playerCards.map((c) => c.rank).filter(Boolean))
+            );
+            selectColumnsForRanks(ranksFromPlayer);
+          }}
+        >
+          Player board
+        </button>
+        <button
+          className="matrix-shortcut-btn"
+          type="button"
+          disabled={isDealing}
+          onClick={() => {
+            if (isDealing) return;
+            const ranksFromDealer = Array.from(
+              new Set(dealerCards.map((c) => c.rank).filter(Boolean))
+            );
+            selectColumnsForRanks(ranksFromDealer);
+          }}
+        >
+          Dealer board
+        </button>
+        <button
+          className="matrix-shortcut-btn"
+          type="button"
+          disabled={isDealing}
+          onClick={() => {
+            if (isDealing) return;
+            const allRanks = Array.from(
+              new Set(
+                [...playerCards, ...dealerCards]
+                  .map((c) => c.rank)
+                  .filter(Boolean)
+              )
+            );
+            selectColumnsForRanks(allRanks);
+          }}
+        >
+          Board
+        </button>
+      </div>
       <div
         style={{
           display: "flex",

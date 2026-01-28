@@ -12,8 +12,8 @@ const Help = () => {
 
   const handleResetProfile = () => {
     if (userId) {
-      // Reset wins and losses on server
-      post("/api/updateStats", { wins: 0, losses: 0 })
+      // Reset wins, losses, and all achievements on server
+      post("/api/resetProfile")
         .then(() => {
           // Close the popup
           setShowResetConfirm(false);

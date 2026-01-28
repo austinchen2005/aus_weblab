@@ -19,8 +19,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Proza+Libre:wght@400;500;600;700&display=swap');
 
 :root {
-  --primary: #396dff;
-  --primary--dim: #6987db;
+  /* Brand palette: Royal gemstone dusk */
+  --pink: #D3045D;
+  --blue: #0C8EF4;
+  --beige: #D1BBAD;
+  --ink: #2B384C;
+  --purple: #A162A1;
+  --navy: #0C287B;
+
+  /* App semantic colors */
+  --app-bg: var(--beige); /* non-home pages background */
+  --surface: #ffffff;
+  --surface-2: #f7f7f7;
+  --border: rgba(43, 56, 76, 0.18);
+  --text: var(--ink);
+  --muted: rgba(43, 56, 76, 0.7);
+
+  /* Legacy utility vars (kept for compatibility) */
+  --primary: var(--blue);
+  --primary--dim: rgba(12, 142, 244, 0.8);
   --darkgrey: #d4d4d4;
   --medgrey: #e0e0e0;
   --grey: #f7f7f7;
@@ -47,8 +64,10 @@ html, body {
 }
 
 body {
-  font-family: "Proza Libre", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 300;
+  background-color: var(--app-bg);
+  color: var(--text);
 }
 
 form {

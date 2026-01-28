@@ -1,8 +1,8 @@
 // Game settings with default values
 export const DEFAULT_SETTINGS = {
   initialDealDelay: 200, // 0.2s in milliseconds
-  repeatDealDelay: 700, // 0.7s in milliseconds
-  dealerDrawDelay: 500, // 0.5s in milliseconds
+  repeatDealDelay: 1500, // 1.5s in milliseconds
+  dealerDrawDelay: 1500, // 1.5s in milliseconds
   cardPopScale: 1.15, // Scale for card popping effect
   // Sound volumes (0–1). These are NOT exposed on the settings page.
   dealSoundVolume: 0.5,
@@ -26,7 +26,8 @@ export const getSetting = (key) => {
       // Allow 1–10 seconds in ms
       return Math.max(1000, Math.min(10000, value));
     } else {
-      return Math.max(100, Math.min(2000, value)); // 0.1s to 2s in ms
+      // Deal/draw delays: allow 0.1s to 5s (in ms)
+      return Math.max(100, Math.min(5000, value));
     }
   }
   return DEFAULT_SETTINGS[key];

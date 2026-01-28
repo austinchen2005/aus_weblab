@@ -2,7 +2,8 @@
   max-width: 1200px;
   margin: 2rem auto;
   padding: 2rem;
-  background-color: white;
+  /* Poker Game background (Play page) */
+  background-color: #ffffff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: relative;
@@ -47,6 +48,22 @@
   z-index: 1;
 }
 
+.hidden-spade-hitbox {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 3rem;
+  height: 3rem;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: default; /* keep arrow cursor so it's less obvious */
+}
+
+.hidden-spade-hitbox:focus {
+  outline: none;
+}
+
 /* h1 uses default Proza Libre from body */
 
 .stats-display {
@@ -54,7 +71,7 @@
   gap: 2rem;
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background-color: #ecf0f1;
+  background-color: rgba(43, 56, 76, 0.06);
   border-radius: 8px;
 }
 
@@ -66,13 +83,13 @@
 
 .stat-label {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--ink);
   font-size: 1.1rem;
 }
 
 .stat-value {
   font-weight: bold;
-  color: #3498db;
+  color: var(--blue);
   font-size: 1.2rem;
 }
 
@@ -84,7 +101,7 @@
 }
 
 .start-btn {
-  background-color: #3498db;
+  background-color: var(--blue);
   color: white;
   border: none;
   padding: 1rem 2rem;
@@ -95,7 +112,7 @@
 }
 
 .start-btn:hover {
-  background-color: #2980b9;
+  background-color: rgba(12, 142, 244, 0.85);
 }
 
 .sort-btn {
@@ -291,6 +308,8 @@
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   transition: opacity 0.3s ease;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .rule-matrix-container.dealing-phase {
@@ -300,17 +319,50 @@
 
 .rule-matrix-container h2 {
   margin: 0 0 1.5rem 0;
-  color: #2c3e50;
+  color: var(--ink);
   font-size: 1.5rem;
   text-align: center;
   /* Uses default Proza Libre from body */
 }
 
+/* Uses default Proza Libre from body */
 .rule-matrix-container .currently-including {
-  /* Uses default Proza Libre from body */
+  color: var(--ink);
 }
 
 /* Card Matrix Styles */
+.matrix-shortcuts {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.matrix-shortcut-btn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  background-color: var(--blue);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.matrix-shortcut-btn:hover:not(:disabled) {
+  background-color: rgba(12, 142, 244, 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
+}
+
+.matrix-shortcut-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .card-matrix {
   display: flex;
   flex-direction: column;
@@ -332,13 +384,14 @@
 
 .matrix-header {
   display: grid;
-  grid-template-columns: 60px repeat(13, 80px);
+  /* Responsive grid: first column slightly narrower, remaining 13 share rest of width */
+  grid-template-columns: 0.7fr repeat(13, 1fr);
   gap: 2px;
 }
 
 .matrix-row {
   display: grid;
-  grid-template-columns: 60px repeat(13, 80px);
+  grid-template-columns: 0.7fr repeat(13, 1fr);
   gap: 2px;
 }
 
@@ -412,11 +465,14 @@
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .matrix-cell.card-cell:hover {
   border-color: #3498db;
-  transform: scale(1.05);
+  transform: scale(1.03);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
 }
 
 .matrix-cell.card-cell.selected {

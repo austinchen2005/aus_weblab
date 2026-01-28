@@ -12,6 +12,8 @@ const Home = () => {
   const [losses, setLosses] = useState(0);
   const [winRate, setWinRate] = useState(0); // fraction from server
   const [bayesianScore, setBayesianScore] = useState(0);
+  const [history, setHistory] = useState([]);
+  const [hoverInfo, setHoverInfo] = useState(null);
 
   useEffect(() => {
     if (userId) {
@@ -23,6 +25,7 @@ const Home = () => {
             setLosses(userData.losses || 0);
             setWinRate(userData.winRate || 0);
             setBayesianScore(userData.bayesianScore || 0);
+            setHistory(Array.isArray(userData.winLossHistory) ? userData.winLossHistory : []);
           }
         })
         .catch((err) => {
@@ -34,6 +37,7 @@ const Home = () => {
       setLosses(0);
       setWinRate(0);
       setBayesianScore(0);
+      setHistory([]);
     }
   }, [userId]);
 
@@ -59,31 +63,79 @@ const Home = () => {
     );
   }
 
+  // Chunk history into rows of 20 (oldest first overall, left→right)
+  const ROW_SIZE = 20;
+  const rows = [];
+  for (let i = 0; i < history.length; i += ROW_SIZE) {
+    rows.push(history.slice(i, i + ROW_SIZE));
+  }
+
+  const formatTooltip = (entry) => {
+    if (!entry) return "";
+    let result, date, playerHandName, dealerHandName;
+    if (typeof entry === "string") {
+      result = entry === "W" ? "Win" : "Loss";
+    } else {
+      result = entry.result === "W" ? "Win" : "Loss";
+      date = entry.date ? new Date(entry.date) : null;
+      playerHandName = entry.playerHandName;
+      dealerHandName = entry.dealerHandName;
+    }
+    const parts = [];
+    if (playerHandName || dealerHandName) {
+      const ph = playerHandName || "Unknown";
+      const dh = dealerHandName || "Unknown";
+      parts.push(`${result}: Player ${ph} vs Dealer ${dh}`);
+    } else {
+      parts.push(result);
+    }
+    if (date && !Number.isNaN(date.getTime())) {
+      parts.push(`(${date.toLocaleString()})`);
+    }
+    return parts.join(" ");
+  };
+
   return (
     <>
       <div className="home-page-wrapper"></div>
       <FallingSuits />
       <div className="home-content">
         <div className="page-container">
-          <h1>Home</h1>
-          <div className="stats-display">
-            <div className="stat-item">
-              <span className="stat-label">Wins:</span>
-              <span className="stat-value">{wins}</span>
+          <p className="home-intro">
+            Welcome! Click the Play tab to play the Single Player 5-8 Poker Game.
+            Click the Help tab to learn how to play the game.
+          </p>
+          {history.length > 0 && (
+            <div className="history-container">
+              <h2 className="history-title">Game History</h2>
+              <div className="history-rows">
+                {rows.map((row, rowIndex) => (
+                  <div key={rowIndex} className="history-row">
+                    {row.map((entry, idx) => {
+                      const res = typeof entry === "string" ? entry : entry.result;
+                      const isWin = res === "W";
+                      return (
+                      <div
+                        key={`${rowIndex}-${idx}`}
+                        className={`history-box ${
+                          isWin ? "history-box-win" : "history-box-loss"
+                        }`}
+                        title={formatTooltip(entry)}
+                        onMouseEnter={() => setHoverInfo(formatTooltip(entry))}
+                        onMouseLeave={() => setHoverInfo(null)}
+                      />
+                    );
+                    })}
+                  </div>
+                ))}
+              </div>
+              {hoverInfo && (
+                <div className="history-hover-info">
+                  {hoverInfo}
+                </div>
+              )}
             </div>
-            <div className="stat-item">
-              <span className="stat-label">Losses:</span>
-              <span className="stat-value">{losses}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Win Rate:</span>
-              <span className="stat-value">{winRatePercent}%</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Bayesian Score:</span>
-              <span className="stat-value">{bayesianScoreDisplay}</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </>

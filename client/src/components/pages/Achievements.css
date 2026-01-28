@@ -8,24 +8,41 @@
   flex-direction: column;
   gap: 1rem;
   margin-top: 1.5rem;
+  margin-bottom: 2.5rem; /* space under the last achievement */
 }
 
 .achievement-row {
   padding: 1rem 1.25rem;
   border-radius: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.achievement-row:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
 }
 
 .achievement-pending {
-  background-color: #e5e7eb; /* gray */
+  background-color: rgba(43, 56, 76, 0.08);
 }
 
 .achievement-completed {
-  background-color: #fdf6b2; /* soft golden */
-  border-color: #fbbf24;
+  /* Completed highlight uses light blue from Royal gemstone dusk palette, softened ~50% */
+  background-color: rgba(12, 142, 244, 0.5);
+  border-color: var(--blue);
+}
+
+/* Subtle color shift on hover for both pending and completed rows */
+.achievement-row:hover.achievement-pending {
+  background-color: rgba(43, 56, 76, 0.12);
+}
+
+.achievement-row:hover.achievement-completed {
+  background-color: rgba(12, 142, 244, 0.65);
 }
 
 .achievement-title {
@@ -38,7 +55,13 @@
 
 .achievement-description {
   font-size: 0.95rem;
-  color: #4b5563;
+  color: var(--muted);
+}
+
+.achievement-stats {
+  font-size: 0.85rem;
+  color: var(--muted);
+  opacity: 0.9;
 }
 
 .achievement-tag {
@@ -47,7 +70,7 @@
   letter-spacing: 0.05em;
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
-  background-color: #fbbf24;
-  color: #78350f;
+  background-color: var(--blue);
+  color: #ffffff;
 }
 

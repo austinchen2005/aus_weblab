@@ -37,6 +37,15 @@ const ALL_ACHIEVEMENT_IDS = [
   "twos_better_than_one",
   "got_a_pair",
   "no_hand_needed",
+  "hidden_spade",
+  "heart_of_the_cards",
+  "got_a_feel",
+  "dedicated",
+  "win_streak",
+  "all_skill",
+  "against_all_odds",
+  "stacked_deck",
+  "give_me_everything",
   "i_am_all",
 ];
 
@@ -95,7 +104,37 @@ function computeAchievementsFromStats({ wins = 0, losses = 0, bayesianScore = 0 
     result.push("master");
   }
 
+  // Got a feel: Play 10 games
+  if (totalGames >= 10) {
+    result.push("got_a_feel");
+  }
+
+  // Dedicated: Play 100 games
+  if (totalGames >= 100) {
+    result.push("dedicated");
+  }
+
   return result;
+}
+
+// Compute win-streak based achievements from win/loss history.
+// History entries may be strings ('W'/'L') or objects with { result }.
+function computeStreakAchievements(history) {
+  if (!Array.isArray(history) || history.length === 0) return [];
+  let streak = 0;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const entry = history[i];
+    const res = typeof entry === "string" ? entry : entry && entry.result;
+    if (res === "W") {
+      streak += 1;
+    } else {
+      break;
+    }
+  }
+  const ids = [];
+  if (streak >= 3) ids.push("win_streak");
+  if (streak >= 7) ids.push("all_skill");
+  return ids;
 }
 
 // Merge existing achievements with new ones, and award meta "i_am_all" if all others are present.
@@ -116,6 +155,44 @@ function mergeAchievements(existing, toAdd) {
   }
 
   return Array.from(set);
+}
+
+// Compute whether the given user should receive the \"legend\" achievement
+// (being #1 on the leaderboard by bayesianScore, then wins).
+function computeLegendAchievement(userId) {
+  return User.find({})
+    .then((users) => {
+      if (!users || users.length === 0) return [];
+
+      const enriched = users.map((user) => {
+        const obj = user.toObject();
+        const derived = computeDerivedStats(obj);
+        return {
+          _id: obj._id,
+          wins: obj.wins || 0,
+          bayesianScore:
+            obj.bayesianScore != null ? obj.bayesianScore : derived.bayesianScore,
+        };
+      });
+
+      enriched.sort((a, b) => {
+        if (b.bayesianScore !== a.bayesianScore) {
+          return b.bayesianScore - a.bayesianScore;
+        }
+        // Tie-breaker: more wins first
+        return b.wins - a.wins;
+      });
+
+      const top = enriched[0];
+      if (top && String(top._id) === String(userId)) {
+        return ["legend"];
+      }
+      return [];
+    })
+    .catch((err) => {
+      console.log(`Error computing legend achievement: ${err}`);
+      return [];
+    });
 }
 
 //initialize socket
@@ -143,13 +220,54 @@ router.post("/initsocket", (req, res) => {
 // | write your API methods below!|
 // |------------------------------|
 
+// Achievement statistics: percentage of users who have each achievement
+router.get("/achievementStats", (req, res) => {
+  User.find({}, "achievements")
+    .then((users) => {
+      const totalUsers = users.length;
+      const counts = {};
+      const percentages = {};
+
+      ALL_ACHIEVEMENT_IDS.forEach((id) => {
+        counts[id] = 0;
+      });
+
+      users.forEach((user) => {
+        (user.achievements || []).forEach((id) => {
+          if (counts[id] !== undefined) {
+            counts[id] += 1;
+          }
+        });
+      });
+
+      ALL_ACHIEVEMENT_IDS.forEach((id) => {
+        if (totalUsers === 0) {
+          percentages[id] = 0;
+        } else {
+          const pct = (counts[id] * 100) / totalUsers;
+          percentages[id] = Math.round(pct * 10) / 10; // one decimal place
+        }
+      });
+
+      res.send({ totalUsers, counts, percentages });
+    })
+    .catch((err) => {
+      console.log(`Error computing achievement stats: ${err}`);
+      res.status(500).send({ err: "Failed to compute achievement stats" });
+    });
+});
+
 // Update user's wins and losses
 router.post("/updateStats", auth.ensureLoggedIn, (req, res) => {
   const { wins, losses } = req.body;
   
   // Compute new wins/losses
-  const newWins = wins !== undefined ? wins : req.user.wins;
-  const newLosses = losses !== undefined ? losses : req.user.losses;
+  const previousWins = req.user.wins || 0;
+  const previousLosses = req.user.losses || 0;
+  const newWins = wins !== undefined ? wins : previousWins;
+  const newLosses = losses !== undefined ? losses : previousLosses;
+  const deltaWins = newWins - previousWins;
+  const deltaLosses = newLosses - previousLosses;
   const derived = computeDerivedStats({ wins: newWins, losses: newLosses });
   const statAchievements = computeAchievementsFromStats({
     wins: newWins,
@@ -175,16 +293,94 @@ router.post("/updateStats", auth.ensureLoggedIn, (req, res) => {
         updatedUser.achievements,
         statAchievements
       );
-      return updatedUser.save();
+      if (!Array.isArray(updatedUser.winLossHistory)) {
+        updatedUser.winLossHistory = [];
+      }
+      const hist = updatedUser.winLossHistory;
+      // Special case: converting a pending loss into a win
+      // (deltaWins = +1, deltaLosses = -1). Flip the most recent 'L' to 'W'
+      // if present; otherwise just append a 'W'.
+      if (deltaWins === 1 && deltaLosses === -1) {
+        if (hist.length > 0) {
+          const last = hist[hist.length - 1];
+          if (typeof last === "string" && last === "L") {
+            hist[hist.length - 1] = "W";
+          } else if (last && typeof last === "object" && last.result === "L") {
+            last.result = "W";
+            last.date = new Date();
+            last.playerHandName = req.body.playerHandName || last.playerHandName || null;
+            last.dealerHandName = req.body.dealerHandName || last.dealerHandName || null;
+          } else {
+            hist.push({
+              result: "W",
+              date: new Date(),
+              playerHandName: req.body.playerHandName || null,
+              dealerHandName: req.body.dealerHandName || null,
+            });
+          }
+        } else {
+          hist.push({
+            result: "W",
+            date: new Date(),
+            playerHandName: req.body.playerHandName || null,
+            dealerHandName: req.body.dealerHandName || null,
+          });
+        }
+      } else if (hist.length === 0) {
+        // Initialization fallback for existing users with no history:
+        // put all wins first, then all losses (approximate order), without hand names.
+        const history = [];
+        for (let i = 0; i < newWins; i += 1) history.push({ result: "W" });
+        for (let i = 0; i < newLosses; i += 1) history.push({ result: "L" });
+        updatedUser.winLossHistory = history;
+      }
+      return updatedUser
+        .save()
+        .then((savedUser) =>
+          computeLegendAchievement(savedUser._id).then((legendIds) => {
+            if (!legendIds.length) return savedUser;
+            savedUser.achievements = mergeAchievements(
+              savedUser.achievements,
+              legendIds
+            );
+            return savedUser.save();
+          })
+        );
     })
-    .then((savedUser) => {
+    .then((finalUser) => {
       // Update session with new user data
-      req.session.user = savedUser;
-      res.send(savedUser);
+      req.session.user = finalUser;
+      res.send(finalUser);
     })
     .catch((err) => {
       console.log(`Error updating stats: ${err}`);
       res.status(500).send({ err: "Failed to update stats" });
+    });
+});
+
+// Reset profile: clear wins, losses, derived stats, and all achievements
+router.post("/resetProfile", auth.ensureLoggedIn, (req, res) => {
+  User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        bayesianScore: 0,
+        achievements: [],
+        winLossHistory: [],
+      },
+    },
+    { new: true }
+  )
+    .then((updatedUser) => {
+      req.session.user = updatedUser;
+      res.send(updatedUser);
+    })
+    .catch((err) => {
+      console.log(`Error resetting profile: ${err}`);
+      res.status(500).send({ err: "Failed to reset profile" });
     });
 });
 
@@ -199,19 +395,51 @@ router.post("/incrementWin", auth.ensureLoggedIn, (req, res) => {
       const { winRate, bayesianScore } = computeDerivedStats(updatedUser);
       updatedUser.winRate = winRate;
       updatedUser.bayesianScore = bayesianScore;
+      if (!Array.isArray(updatedUser.winLossHistory)) {
+        updatedUser.winLossHistory = [];
+      }
+      if (updatedUser.winLossHistory.length === 0) {
+        // Initialize history from current totals (all wins then losses) without hand names
+        const history = [];
+        const w = updatedUser.wins || 0;
+        const l = updatedUser.losses || 0;
+        for (let i = 0; i < w; i += 1) history.push({ result: "W" });
+        for (let i = 0; i < l; i += 1) history.push({ result: "L" });
+        updatedUser.winLossHistory = history;
+      } else {
+        updatedUser.winLossHistory.push({
+          result: "W",
+          date: new Date(),
+          playerHandName: req.body.playerHandName || null,
+          dealerHandName: req.body.dealerHandName || null,
+        });
+      }
+      const statIds = computeAchievementsFromStats({
+        wins: updatedUser.wins || 0,
+        losses: updatedUser.losses || 0,
+        bayesianScore,
+      });
+      const streakIds = computeStreakAchievements(updatedUser.winLossHistory);
       updatedUser.achievements = mergeAchievements(
         updatedUser.achievements,
-        computeAchievementsFromStats({
-          wins: updatedUser.wins || 0,
-          losses: updatedUser.losses || 0,
-          bayesianScore,
-        })
+        [...statIds, ...streakIds]
       );
-      return updatedUser.save();
+      return updatedUser
+        .save()
+        .then((savedUser) =>
+          computeLegendAchievement(savedUser._id).then((legendIds) => {
+            if (!legendIds.length) return savedUser;
+            savedUser.achievements = mergeAchievements(
+              savedUser.achievements,
+              legendIds
+            );
+            return savedUser.save();
+          })
+        );
     })
-    .then((savedUser) => {
-      req.session.user = savedUser;
-      res.send(savedUser);
+    .then((finalUser) => {
+      req.session.user = finalUser;
+      res.send(finalUser);
     })
     .catch((err) => {
       console.log(`Error incrementing win: ${err}`);
@@ -238,11 +466,41 @@ router.post("/incrementLoss", auth.ensureLoggedIn, (req, res) => {
           bayesianScore,
         })
       );
-      return updatedUser.save();
+      if (!Array.isArray(updatedUser.winLossHistory)) {
+        updatedUser.winLossHistory = [];
+      }
+      if (updatedUser.winLossHistory.length === 0) {
+        // Initialize history from current totals (all wins then losses) without hand names
+        const history = [];
+        const w = updatedUser.wins || 0;
+        const l = updatedUser.losses || 0;
+        for (let i = 0; i < w; i += 1) history.push({ result: "W" });
+        for (let i = 0; i < l; i += 1) history.push({ result: "L" });
+        updatedUser.winLossHistory = history;
+      } else {
+        updatedUser.winLossHistory.push({
+          result: "L",
+          date: new Date(),
+          playerHandName: req.body.playerHandName || null,
+          dealerHandName: req.body.dealerHandName || null,
+        });
+      }
+      return updatedUser
+        .save()
+        .then((savedUser) =>
+          computeLegendAchievement(savedUser._id).then((legendIds) => {
+            if (!legendIds.length) return savedUser;
+            savedUser.achievements = mergeAchievements(
+              savedUser.achievements,
+              legendIds
+            );
+            return savedUser.save();
+          })
+        );
     })
-    .then((savedUser) => {
-      req.session.user = savedUser;
-      res.send(savedUser);
+    .then((finalUser) => {
+      req.session.user = finalUser;
+      res.send(finalUser);
     })
     .catch((err) => {
       console.log(`Error incrementing loss: ${err}`);
@@ -276,13 +534,37 @@ router.post("/updateUser", auth.ensureLoggedIn, (req, res) => {
             bayesianScore,
           })
         );
-        return updatedUser.save();
+        // If caller explicitly set wins/losses through updateUser, rebuild history
+        // as all wins then all losses (we don't know true recency order here).
+        if (
+          !Array.isArray(updatedUser.winLossHistory) ||
+          updatedUser.winLossHistory.length === 0
+        ) {
+          const history = [];
+          const w = updatedUser.wins || 0;
+          const l = updatedUser.losses || 0;
+          for (let i = 0; i < w; i += 1) history.push({ result: "W" });
+          for (let i = 0; i < l; i += 1) history.push({ result: "L" });
+          updatedUser.winLossHistory = history;
+        }
+        return updatedUser
+          .save()
+          .then((savedUser) =>
+            computeLegendAchievement(savedUser._id).then((legendIds) => {
+              if (!legendIds.length) return savedUser;
+              savedUser.achievements = mergeAchievements(
+                savedUser.achievements,
+                legendIds
+              );
+              return savedUser.save();
+            })
+          );
       }
       return updatedUser;
     })
-    .then((savedUser) => {
-      req.session.user = savedUser;
-      res.send(savedUser);
+    .then((finalUser) => {
+      req.session.user = finalUser;
+      res.send(finalUser);
     })
     .catch((err) => {
       console.log(`Error updating user: ${err}`);

@@ -10,6 +10,10 @@ const UserSchema = new mongoose.Schema({
   bayesianScore: { type: Number, default: 0 },  // (wins + alpha) / (wins + losses + alpha + beta)
   // One-time achievements (store achievement IDs the user has unlocked)
   achievements: { type: [String], default: [] },
+  // Ordered history of outcomes, most recent last.
+  // Each entry may be a simple string ('W' or 'L') from older data,
+  // or an object: { result: 'W'|'L', date, playerHandName, dealerHandName }.
+  winLossHistory: { type: [mongoose.Schema.Types.Mixed], default: [] },
 });
 
 // compile model from schema

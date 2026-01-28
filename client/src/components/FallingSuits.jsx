@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import "./FallingSuits.css";
 
 const suits = ['♠', '♥', '♦', '♣'];
@@ -11,46 +11,50 @@ const suitColors = {
 
 const FallingSuits = () => {
   const [fallingSuits, setFallingSuits] = useState([]);
+  const nextIdRef = useRef(0);
 
   useEffect(() => {
     let timeoutId;
     
     const createNextSuit = () => {
-      // Create a new falling suit
-      const suit = suits[Math.floor(Math.random() * suits.length)];
-      const left = Math.random() * 100; // Random horizontal position (0-100%)
-      const rotation = Math.random() * 360; // Random rotation 0 to 360 degrees
-      const size = 2 + Math.random() * 1.5; // Random size 2-3.5rem
-      
-      // Calculate falling speed: random between 50-300px/s
-      const speed = 50 + Math.random() * 250; // 50 to 300 px/s
-      
-      // Calculate distance: viewport height + 5rem (approximately 80px)
+      // Create 2 suits per tick for 2x density
+      const count = 2;
       const viewportHeight = window.innerHeight;
       const distance = viewportHeight + 80; // 100vh + 5rem ≈ viewportHeight + 80px
-      
-      // Calculate duration based on speed: duration = distance / speed
-      const duration = distance / speed; // in seconds
-      
-      const newSuit = {
-        id: Date.now() + Math.random(),
-        suit,
-        left,
-        rotation,
-        duration,
-        size,
-        color: suitColors[suit]
-      };
 
-      setFallingSuits(prev => [...prev, newSuit]);
+      const newBatch = [];
+      for (let i = 0; i < count; i += 1) {
+        const suit = suits[Math.floor(Math.random() * suits.length)];
+        const left = Math.random() * 100; // Random horizontal position (0-100%)
+        const rotation = Math.random() * 360; // Random rotation 0 to 360 degrees
+        const size = 2 + Math.random() * 1.5; // Random size 2-3.5rem
+        
+        // Calculate falling speed: random between 50-300px/s
+        const speed = 50 + Math.random() * 250; // 50 to 300 px/s
+        // Calculate duration based on speed: duration = distance / speed
+        const duration = distance / speed; // in seconds
+        
+        const newSuit = {
+          id: nextIdRef.current++,
+          suit,
+          left,
+          rotation,
+          duration,
+          size,
+          color: suitColors[suit]
+        };
+        newBatch.push(newSuit);
 
-      // Remove the suit after it falls
-      setTimeout(() => {
-        setFallingSuits(prev => prev.filter(s => s.id !== newSuit.id));
-      }, duration * 1000);
+        // Remove each suit after it falls
+        setTimeout(() => {
+          setFallingSuits(prev => prev.filter(s => s.id !== newSuit.id));
+        }, duration * 1000);
+      }
+
+      setFallingSuits(prev => [...prev, ...newBatch]);
       
-      // Schedule next suit with random delay between 0.1s-1s
-      const nextDelay = 100 + Math.random() * 900; // 100ms to 1000ms (0.1s to 1s)
+      // Schedule next batch with random delay between 0.1s-0.5s (2x as many)
+      const nextDelay = 100 + Math.random() * 400; // 100ms to 500ms
       timeoutId = setTimeout(createNextSuit, nextDelay);
     };
     

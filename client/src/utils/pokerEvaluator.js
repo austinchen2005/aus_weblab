@@ -256,14 +256,6 @@ export function evaluateHighCard(cards) {
     }
   }
 
-  // Check for pair
-  for (const [value, count] of Object.entries(counts)) {
-    if (count === 2) {
-      const val = parseInt(value, 10);
-      return { value: 2, name: `Pair of ${valueToRankName(val)}`, rank: val };
-    }
-  }
-
   // Check for two pair (if 4 cards)
   if (cards.length === 4) {
     const pairs = [];
@@ -280,6 +272,14 @@ export function evaluateHighCard(cards) {
         name: `Two Pair, ${valueToRankName(highPair)} and ${valueToRankName(lowPair)}`,
         rank: highPair,
       };
+    }
+  }
+
+  // Check for pair (must come AFTER two-pair check)
+  for (const [value, count] of Object.entries(counts)) {
+    if (count === 2) {
+      const val = parseInt(value, 10);
+      return { value: 2, name: `Pair of ${valueToRankName(val)}`, rank: val };
     }
   }
 

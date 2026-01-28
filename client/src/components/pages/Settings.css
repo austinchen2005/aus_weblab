@@ -6,7 +6,7 @@
   max-width: 800px;
   margin: 2rem auto;
   padding: 2rem;
-  background-color: white;
+  background-color: var(--surface);
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
@@ -26,7 +26,7 @@
   display: block;
   font-size: 1.2rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--ink);
   margin-bottom: 1rem;
 }
 
@@ -51,27 +51,27 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #3498db;
+  background: var(--blue);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .setting-slider::-webkit-slider-thumb:hover {
-  background: #2980b9;
+  background: rgba(12, 142, 244, 0.85);
 }
 
 .setting-slider::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #3498db;
+  background: var(--blue);
   cursor: pointer;
   border: none;
   transition: background 0.2s;
 }
 
 .setting-slider::-moz-range-thumb:hover {
-  background: #2980b9;
+  background: rgba(12, 142, 244, 0.85);
 }
 
 .setting-input {
@@ -86,7 +86,7 @@
 
 .setting-input:focus {
   outline: none;
-  border-color: #3498db;
+  border-color: var(--blue);
 }
 
 .setting-actions {
@@ -100,7 +100,7 @@
 }
 
 .reset-btn {
-  background-color: #e74c3c;
+  background-color: var(--pink);
   color: white;
   border: none;
   padding: 0.75rem 2rem;
@@ -112,7 +112,7 @@
 }
 
 .reset-btn:hover {
-  background-color: #c0392b;
+  background-color: rgba(211, 4, 93, 0.85);
 }
 
 .reset-btn:active {
@@ -120,7 +120,7 @@
 }
 
 .change-username-btn {
-  background-color: #3498db;
+  background-color: var(--blue);
   color: white;
   border: none;
   padding: 0.75rem 2rem;
@@ -132,7 +132,7 @@
 }
 
 .change-username-btn:hover {
-  background-color: #2980b9;
+  background-color: rgba(12, 142, 244, 0.85);
 }
 
 .change-username-btn:active {
