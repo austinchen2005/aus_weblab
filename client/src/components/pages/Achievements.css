@@ -32,7 +32,7 @@
 
 .achievement-completed {
   /* Completed highlight uses primary blue from new palette, softened ~50% */
-  background-color: rgba(33, 188, 240, 0.6);
+  background-color: rgba(57, 205, 255, 0.6);
   border-color: var(--primary);
 }
 

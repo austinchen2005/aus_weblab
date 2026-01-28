@@ -342,7 +342,7 @@
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
   border: none;
-  background-color: var(--blue);
+  background-color: var(--primary);
   color: #ffffff;
   font-size: 0.9rem;
   font-weight: 600;
@@ -352,7 +352,7 @@
 }
 
 .matrix-shortcut-btn:hover:not(:disabled) {
-  background-color: rgba(12, 142, 244, 0.85);
+  background-color: var(--primary-dark);
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
 }
@@ -420,12 +420,12 @@
 }
 
 .matrix-cell.header-cell.column-selected {
-  background-color: #fbc02d;
+  background-color: #ffd15b;
   color: #2c3e50;
 }
 
 .matrix-cell.header-cell.row-selected {
-  background-color: #fbc02d;
+  background-color: #ffd15b;
   color: #2c3e50;
 }
 
@@ -476,7 +476,7 @@
 }
 
 .matrix-cell.card-cell.selected {
-  background-color: #ffeb3b;
+  background-color: #fcf4a9;
   border-color: #fbc02d;
   box-shadow: 0 2px 8px rgba(255, 235, 59, 0.5);
 }

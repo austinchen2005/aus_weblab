@@ -33,6 +33,7 @@
   position: relative;
   z-index: 2;
   min-height: 100vh;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 /* Scope all styles to home-content to prevent bleeding to other pages */
@@ -90,6 +91,7 @@
   font-size: 1.2rem;
   margin-bottom: 0.5rem;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 .history-hover-info {
@@ -97,6 +99,7 @@
   color: white;
   font-size: 0.9rem;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 .history-rows {

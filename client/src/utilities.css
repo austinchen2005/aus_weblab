@@ -44,6 +44,7 @@
   --app-bg: var(--blue-10); /* non-home pages background */
 
   /* Legacy utility vars (kept for compatibility) */
+  --pink: #d3045d;
   --primary--dim: rgba(4, 102, 200, 0.8);
   --darkgrey: #d4d4d4;
   --medgrey: #e0e0e0;

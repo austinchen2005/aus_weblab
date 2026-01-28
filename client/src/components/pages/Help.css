@@ -8,7 +8,7 @@
 }
 
 .rules-btn {
-  background-color: transparent;
+  background-color: rgba(4, 102, 200, 0.12);
   color: #ffffff;
   border: 3px solid var(--primary);
   display: block;
@@ -30,7 +30,7 @@
 }
 
 .bayes-btn {
-  background-color: transparent;
+  background-color: rgba(4, 102, 200, 0.12);
   border-width: 3px;
 }
 
@@ -69,8 +69,8 @@
 }
 
 .reset-profile-btn {
-  background-color: transparent;
-  color: var(--pink);
+  background-color: rgba(246, 22, 119, 0.886);
+  color: #ffffff
   border: 3px solid var(--pink);
   padding: 1rem 2rem;
   font-size: 1.2rem;
@@ -83,7 +83,7 @@
 }
 
 .reset-profile-btn:hover {
-  background-color: rgba(211, 4, 93, 0.85);
+  background-color: rgb(242, 14, 60);
 }
 
 .reset-profile-btn:active {
@@ -161,8 +161,8 @@
 }
 
 .popup-btn-yes {
-  background-color: var(--pink);
-  color: white;
+  background-color: rgba(211, 4, 93, 0.95); /* strong pink for contrast */
+  color: #ffffff;
 }
 
 .popup-btn-yes:hover {
